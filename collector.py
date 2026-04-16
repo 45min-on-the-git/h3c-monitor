@@ -114,14 +114,10 @@ def parse_version(version_output: str, device_type: str) -> Dict[str, Any]:
 
 def extract_uptime(version_output: str) -> Optional[str]:
     """提取运行时间"""
-    # 尝试多种格式
-    uptime_match = re.search(r' uptime is ([\d\-:,]+)', version_output, re.IGNORECASE)
-    if uptime_match:
-        return uptime_match.group(1).strip()
-    
-    uptime_match = re.search(r'is \d+ years? [\d:]+', version_output, re.IGNORECASE)
-    if uptime_match:
-        return uptime_match.group(0).strip()
+    # H3C Comware 输出格式：uptime is 0 weeks, 3 days, 7 hours, 19 minutes
+    match = re.search(r'uptime is\s*([\d\w,\s]+)', version_output, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
     
     return None
 
@@ -129,16 +125,22 @@ def extract_uptime(version_output: str) -> Optional[str]:
 def extract_cpu_usage(cpu_output: str) -> Optional[float]:
     """提取 CPU 使用率"""
     # H3C display cpu-usage 输出示例：
-    # CPU usage interval : 5 seconds
-    # CPU usage interval : 1 minutes
-    # CPU usage interval : 5 minutes
+    # Unit CPU usage:
+    #        1% in last 5 seconds
+    #        2% in last 1 minute
+    #        1% in last 5 minutes
     
-    # 查找 5 秒的 CPU 使用率
-    match = re.search(r'5 second[s]?:\s*(\d+\.?\d*)%', cpu_output, re.IGNORECASE)
+    # 优先获取 5 秒的 CPU 使用率
+    match = re.search(r'(\d+)%\s+in\s+last\s+5\s+seconds?', cpu_output, re.IGNORECASE)
     if match:
         return float(match.group(1))
     
-    match = re.search(r'CPU usage \(5 seconds\):\s*(\d+\.?\d*)%', cpu_output, re.IGNORECASE)
+    match = re.search(r'(\d+)%\s+in\s+last\s+5\s+secs?', cpu_output, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    
+    # 尝试其他格式
+    match = re.search(r'last\s+5\s+seconds?.*?(\d+)%', cpu_output, re.IGNORECASE)
     if match:
         return float(match.group(1))
     
@@ -148,13 +150,30 @@ def extract_cpu_usage(cpu_output: str) -> Optional[float]:
 def extract_mem_usage(mem_output: str) -> Optional[float]:
     """提取内存使用率"""
     # H3C display memory 输出示例：
-    # Total: 2603716K, Used: 1234567K, Free: 1369149K, Usage: 47.41%
+    # Mem:       1978716    981468    997248         0     10316    326212       51.4%
+    # 最后一列是 FreeRatio，所以使用率 = 100 - FreeRatio
     
+    # 尝试提取 FreeRatio
+    match = re.search(r'FreeRatio\s*(\d+\.?\d*)%', mem_output, re.IGNORECASE)
+    if match:
+        free_ratio = float(match.group(1))
+        usage = 100 - free_ratio
+        return round(usage, 2)
+    
+    # 或者直接从 Mem:行提取 Total 和 Used
+    mem_line_match = re.search(r'Mem:\s+(\d+)\s+(\d+)\s+(\d+)', mem_output)
+    if mem_line_match:
+        total = int(mem_line_match.group(1))
+        used = int(mem_line_match.group(2))
+        if total > 0:
+            return round((used / total) * 100, 2)
+    
+    # 尝试旧格式
     match = re.search(r'Usage:\s*(\d+\.?\d*)%', mem_output, re.IGNORECASE)
     if match:
         return float(match.group(1))
     
-    # 尝试其他方式
+    # 总使用量和总容量
     total_match = re.search(r'Total:\s*(\d+)', mem_output)
     used_match = re.search(r'Used:\s*(\d+)', mem_output)
     
@@ -186,17 +205,23 @@ def parse_interfaces(if_output: str, device_type: str) -> List[Dict[str, Any]]:
     interfaces = []
     
     # 解析 display interface brief 输出
+    # 格式示例：
+    # Interface            Link Protocol Primary IP        Description              
+    # HGE1/0/1             UP   UP       --                
+    # MGE0/0/0             UP   UP       192.168.42.150    
+    
     lines = if_output.strip().split('\n')
     for line in lines:
-        # 匹配类似 "Ten-GigabitEthernet1/0/1  UP  DOWN  -  -  -" 的格式
-        parts = line.split()
-        if len(parts) >= 2 and parts[0].startswith('G') or parts[0].startswith('T') or parts[0].startswith('X') or parts[0].startswith('E') or parts[0].startswith('V') or parts[0].startswith('M') or parts[0].startswith('CE') or parts[0].startswith('XGE') or parts[0].startswith('ETH') or parts[0].startswith('MEth'):
-            if_name = parts[0]
+        # 匹配接口名称（HGE1/0/1, MGE0/0/0, GE1/0/1 等）
+        iface_match = re.match(r'\s*(H?GE\d+/\d+/\d+|MEth\d+)', line)
+        if iface_match:
+            if_name = iface_match.group(1)
+            parts = line.split()
             status = parts[1] if len(parts) > 1 else 'DOWN'
             
             interfaces.append({
                 'if_name': if_name,
-                'status': 'UP' if status.lower() == 'up' else 'DOWN',
+                'status': 'UP' if status.upper() == 'UP' else 'DOWN',
                 'in_bytes': 0,
                 'out_bytes': 0,
                 'in_util': 0,
