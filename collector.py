@@ -2,7 +2,7 @@
 from netmiko import ConnectHandler
 from textfsm import TextFSM
 from typing import Dict, List, Optional, Any
-import config
+import config  # noqa: F401
 import re
 
 
@@ -291,6 +291,8 @@ def extract_management_ip(ip_output: str) -> Optional[str]:
 
 def collect_all_devices() -> List[Dict[str, Any]]:
     """采集所有设备的数据"""
+    import config  # noqa: F401
+    
     results = []
     
     for device_config in config.DEVICE_LIST:

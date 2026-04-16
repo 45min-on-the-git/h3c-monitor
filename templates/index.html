@@ -129,6 +129,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDevices();
             await loadMetrics();
+            await loadAllDeviceCards(); // 显示所有设备卡片
             
             // 设置时间范围
             const now = new Date();
@@ -202,7 +203,8 @@
             const container = document.getElementById('devicesContainer');
             
             if (!deviceId) {
-                container.innerHTML = '';
+                // 如果选择了"全部"，加载所有设备卡片
+                await loadAllDeviceCards();
                 return;
             }
             
@@ -239,6 +241,44 @@
             }
         }
 
+        // 加载所有设备卡片
+        async function loadAllDeviceCards() {
+            const container = document.getElementById('devicesContainer');
+            container.innerHTML = '';
+            
+            for (const device of devices) {
+                try {
+                    const response = await fetch(`/api/metrics/latest/${device.id}`);
+                    const metric = await response.json();
+                    
+                    const card = document.createElement('div');
+                    card.className = 'col-md-6 col-lg-3 mb-3';
+                    card.innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${device.device_name || device.hostname}</h6>
+                                <p class="text-muted mb-2">${device.ip}</p>
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <div class="metric-label">CPU</div>
+                                        <div class="metric-value">${metric.cpu_usage !== null ? metric.cpu_usage.toFixed(1) + '%' : '-'}</div>
+                                    </div>
+                                    <div>
+                                        <div class="metric-label">内存</div>
+                                        <div class="metric-value">${metric.mem_usage !== null ? metric.mem_usage.toFixed(1) + '%' : '-'}</div>
+                                    </div>
+                                </div>
+                                <p class="text-muted mb-0"><small>${metric.collect_time ? new Date(metric.collect_time).toLocaleString('zh-CN') : '-'}</small></p>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                } catch (error) {
+                    console.error(`加载 ${device.ip} 失败:`, error);
+                }
+            }
+        }
+
         // 采集所有设备
         async function collectAll() {
             try {
@@ -253,9 +293,12 @@
                     alert(`采集完成：${result.success_count}/${result.total} 成功`);
                     await loadDevices();
                     await loadMetrics();
-                    await loadDeviceData();
+                    await loadAllDeviceCards(); // 重新加载所有设备卡片
                 } else {
-                    alert('采集失败：' + (result.failures[0]?.error || '未知错误'));
+                    const errorMsg = result.failures && result.failures.length > 0 
+                        ? result.failures[0].error || '未知错误' 
+                        : '未知错误';
+                    alert('采集失败：' + errorMsg);
                 }
             } catch (error) {
                 console.error('采集失败:', error);

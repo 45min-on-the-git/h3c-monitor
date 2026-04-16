@@ -7,6 +7,8 @@ from typing import Optional
 import os
 import uvicorn
 import config
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 import database
 import collector
@@ -25,7 +27,49 @@ templates = Jinja2Templates(directory="templates")
 # 初始化数据库
 database.init_db()
 
+# 创建 APScheduler
+scheduler = AsyncIOScheduler()
 
+
+def auto_collect():
+    """自动采集所有设备数据"""
+    print("Starting automatic data collection...")
+    results = collector.collect_all_devices()
+    
+    success_count = 0
+    for result in results:
+        if result['success']:
+            data = result['data']
+            device_id = database.get_or_create_device(data)
+            database.save_metrics(device_id, {
+                'cpu_usage': data.get('cpu_usage'),
+                'mem_usage': data.get('mem_usage'),
+                'temperature': data.get('temperature'),
+                'session_count': data.get('session_count'),
+                'uptime': data.get('uptime')
+            })
+            database.save_interfaces(device_id, data.get('interfaces', []))
+            success_count += 1
+        else:
+            print(f"Failed to collect {data.get('ip', 'unknown')}: {result['error']}")
+    
+    print(f"Auto collection complete: {success_count}/{len(results)} success")
+
+
+# 启动时自动采集
+auto_collect()
+
+# 启动采集调度器（每 5 分钟）
+scheduler.add_job(
+    auto_collect,
+    trigger=IntervalTrigger(minutes=config.COLLECT_INTERVAL),
+    id='auto_collect',
+    replace_existing=True
+)
+scheduler.start()
+
+
+# 路由定义
 @app.get("/")
 async def root():
     """返回前端页面"""
@@ -77,7 +121,7 @@ async def get_latest_metrics(device_id: int):
     return JSONResponse(content=metrics)
 
 
-@app.post("/api/collect/{device_ip}")
+@app.get("/api/collect/{device_ip}")
 async def collect_device(device_ip: str):
     """手动采集单台设备数据"""
     # 查找设备配置
@@ -117,16 +161,71 @@ async def collect_device(device_ip: str):
 @app.post("/api/collect/all")
 async def collect_all():
     """采集所有设备数据"""
+    import collector  # noqa: F401
+    
     results = collector.collect_all_devices()
     
     success_count = sum(1 for r in results if r['success'])
+    failure_count = sum(1 for r in results if not r['success'])
+    
+    # 保存采集到的数据
+    for result in results:
+        if result['success']:
+            data = result['data']
+            device_id = database.get_or_create_device(data)
+            database.save_metrics(device_id, {
+                'cpu_usage': data.get('cpu_usage'),
+                'mem_usage': data.get('mem_usage'),
+                'temperature': data.get('temperature'),
+                'session_count': data.get('session_count'),
+                'uptime': data.get('uptime')
+            })
+            database.save_interfaces(device_id, data.get('interfaces', []))
     
     return JSONResponse(content={
         'success': True,
         'total': len(results),
         'success_count': success_count,
+        'failure_count': failure_count,
         'failures': [r for r in results if not r['success']]
     })
+
+
+@app.post("/api/collect/{device_ip}")
+async def collect_device(device_ip: str):
+    """手动采集单台设备数据"""
+    # 查找设备配置
+    device_config = None
+    for dev in config.DEVICE_LIST:
+        if dev['ip'] == device_ip:
+            device_config = dev
+            break
+    
+    if not device_config:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    # 采集数据
+    result = collector.collect_device_data(device_config)
+    
+    if not result['success']:
+        raise HTTPException(status_code=500, detail=result['error'])
+    
+    data = result['data']
+    
+    # 保存到数据库
+    device_id = database.get_or_create_device(data)
+    database.save_metrics(device_id, {
+        'cpu_usage': data.get('cpu_usage'),
+        'mem_usage': data.get('mem_usage'),
+        'temperature': data.get('temperature'),
+        'session_count': data.get('session_count'),
+        'uptime': data.get('uptime')
+    })
+    
+    # 保存接口信息
+    database.save_interfaces(device_id, data.get('interfaces', []))
+    
+    return JSONResponse(content={'success': True, 'data': data})
 
 
 # 启动时的设备列表
