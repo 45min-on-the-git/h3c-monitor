@@ -205,15 +205,21 @@ def parse_interfaces(if_output: str, device_type: str) -> List[Dict[str, Any]]:
     interfaces = []
     
     # 解析 display interface brief 输出
-    # 格式示例：
+    # 防火墙格式示例：
+    # Interface            Link Protocol Primary IP      Description                
+    # GE1/0                UP   UP       192.168.42.130  
+    # GE2/0                UP   UP       --              
+    
+    # 交换机格式示例：
     # Interface            Link Protocol Primary IP        Description              
     # HGE1/0/1             UP   UP       --                
     # MGE0/0/0             UP   UP       192.168.42.150    
     
     lines = if_output.strip().split('\n')
     for line in lines:
-        # 匹配接口名称（HGE1/0/1, MGE0/0/0, GE1/0/1 等）
-        iface_match = re.match(r'\s*(H?GE\d+/\d+/\d+|MEth\d+)', line)
+        # 匹配接口名称（支持 2 位和 3 位格式）
+        # GE1/0, GE2/0, HGE1/0/1, MGE0/0/0, MEth0/0/0, InLoop0 等
+        iface_match = re.match(r'\s*(GE\d+/\d+|H?GE\d+/\d+/\d+|MEth\d+/0/0|MGE\d+/\d+/\d+|InLoop\d+|NULL\d+|REG\d+)', line)
         if iface_match:
             if_name = iface_match.group(1)
             parts = line.split()
