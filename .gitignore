@@ -8,10 +8,10 @@ __pycache__/
 venv/
 ENV/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Database (exclude for now, include when ready)
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # IDE
 .vscode/
