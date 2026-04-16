@@ -23,7 +23,8 @@ def collect_device_data(device_config: Dict[str, Any]) -> Dict[str, Any]:
             'password': device_config['password'],
             'timeout': 10,
             'session_timeout': 10,
-            'strict_hostkey_check': False,
+            'allow_agent': False,
+            'look_for_keys': False,
             'hostkey_algorithms': '+ssh-rsa'
         }
         
