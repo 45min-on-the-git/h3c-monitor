@@ -99,7 +99,7 @@ def get_or_create_device(device_info: Dict[str, Any]) -> int:
             device_info.get('hostname', ''),
             device_info.get('model', ''),
             device_info.get('sw_version', ''),
-            device_info['username']
+            device_info.get('username', '')
         ))
         device_id = cursor.lastrowid
     
