@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 import os
 import uvicorn
+import config
 
 import database
 import collector
