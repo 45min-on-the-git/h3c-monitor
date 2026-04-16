@@ -22,10 +22,7 @@ def collect_device_data(device_config: Dict[str, Any]) -> Dict[str, Any]:
             'username': device_config['username'],
             'password': device_config['password'],
             'timeout': 10,
-            'session_timeout': 10,
-            'allow_agent': False,
-            'look_for_keys': False,
-            'hostkey_algorithms': '+ssh-rsa'
+            'session_timeout': 10
         }
         
         net_connect = ConnectHandler(**netconf)
