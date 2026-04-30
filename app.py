@@ -1,9 +1,9 @@
 # FastAPI 后端应用
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from typing import Optional
+import threading
 import os
 import uvicorn
 import config
@@ -35,7 +35,7 @@ def auto_collect():
     """自动采集所有设备数据"""
     print("Starting automatic data collection...")
     results = collector.collect_all_devices()
-    
+
     success_count = 0
     for result in results:
         if result['success']:
@@ -52,7 +52,7 @@ def auto_collect():
             success_count += 1
         else:
             print(f"Failed to collect {data.get('ip', 'unknown')}: {result['error']}")
-    
+
     print(f"Auto collection complete: {success_count}/{len(results)} success")
 
 
@@ -66,7 +66,10 @@ scheduler.add_job(
     id='auto_collect',
     replace_existing=True
 )
-scheduler.start()
+
+# 在后台线程启动调度器，避免阻塞主线程
+scheduler_thread = threading.Thread(target=scheduler.start, daemon=True)
+scheduler_thread.start()
 
 
 # 路由定义
@@ -80,10 +83,10 @@ async def root():
 async def get_devices():
     """获取设备列表"""
     devices = database.get_devices()
-    
+
     # 添加设备配置信息
     device_map = {d['ip']: d for d in config.DEVICE_LIST}
-    
+
     result = []
     for device in devices:
         config_info = device_map.get(device['ip'], {})
@@ -97,7 +100,7 @@ async def get_devices():
             'device_category': config_info.get('device_category', device['device_type']),
             'device_name': config_info.get('device_name', '')
         })
-    
+
     return JSONResponse(content=result)
 
 
@@ -114,7 +117,7 @@ async def get_metrics(
 
 @app.get("/api/metrics/latest/{device_id}")
 async def get_latest_metrics(device_id: int):
-    """获取最新指标"""
+    """获取设备最新指标"""
     metrics = database.get_latest_metrics(device_id)
     if not metrics:
         raise HTTPException(status_code=404, detail="No metrics found")
@@ -131,13 +134,11 @@ async def get_interfaces(device_id: int):
 @app.post("/api/collect/all")
 async def collect_all():
     """采集所有设备数据"""
-    import collector  # noqa: F401
-    
     results = collector.collect_all_devices()
-    
+
     success_count = sum(1 for r in results if r['success'])
     failure_count = sum(1 for r in results if not r['success'])
-    
+
     # 保存采集到的数据
     for result in results:
         if result['success']:
@@ -151,7 +152,7 @@ async def collect_all():
                 'uptime': data.get('uptime')
             })
             database.save_interfaces(device_id, data.get('interfaces', []))
-    
+
     return JSONResponse(content={
         'success': True,
         'total': len(results),
@@ -170,18 +171,18 @@ async def collect_device(device_ip: str):
         if dev['ip'] == device_ip:
             device_config = dev
             break
-    
+
     if not device_config:
         raise HTTPException(status_code=404, detail="Device not found")
-    
+
     # 采集数据
     result = collector.collect_device_data(device_config)
-    
+
     if not result['success']:
         raise HTTPException(status_code=500, detail=result['error'])
-    
+
     data = result['data']
-    
+
     # 保存到数据库
     device_id = database.get_or_create_device(data)
     database.save_metrics(device_id, {
@@ -191,14 +192,13 @@ async def collect_device(device_ip: str):
         'session_count': data.get('session_count'),
         'uptime': data.get('uptime')
     })
-    
+
     # 保存接口信息
     database.save_interfaces(device_id, data.get('interfaces', []))
-    
+
     return JSONResponse(content={'success': True, 'data': data})
 
 
-# 启动时的设备列表
 @app.get("/api/available-devices")
 async def get_available_devices():
     """获取配置的设备列表（包含不在数据库中的）"""
