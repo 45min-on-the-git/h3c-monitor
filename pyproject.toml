@@ -1,0 +1,19 @@
+[project]
+name = "h3c-monitor"
+version = "0.1.0"
+description = "H3C 网络设备监控 - 通过 SSH 采集并监控 H3C 交换机和防火墙"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.135.0",
+    "uvicorn>=0.30.0",
+    "netmiko>=4.6.0",
+    "apscheduler>=3.11.0",
+    "jinja2>=3.1.0",
+]
+
+[project.scripts]
+h3c-monitor = "app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app.py", "collector.py", "database.py", "config.py"]

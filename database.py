@@ -226,17 +226,17 @@ def get_latest_metrics(device_id: int) -> Optional[Dict[str, Any]]:
     """获取设备最新指标"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-        SELECT * FROM device_metrics 
-        WHERE device_id = ? 
-        ORDER BY collect_time DESC 
+        SELECT * FROM device_metrics
+        WHERE device_id = ?
+        ORDER BY collect_time DESC
         LIMIT 1
     ''', (device_id,))
-    
+
     row = cursor.fetchone()
     conn.close()
-    
+
     if row:
         return {
             'id': row['id'],
@@ -249,3 +249,37 @@ def get_latest_metrics(device_id: int) -> Optional[Dict[str, Any]]:
             'uptime': row['uptime']
         }
     return None
+
+
+def get_latest_interfaces(device_id: int) -> List[Dict[str, Any]]:
+    """获取设备最新接口信息（每个接口取最新一条）"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 每个接口取最新时间的记录
+    cursor.execute('''
+        SELECT * FROM interface_stats i1
+        WHERE device_id = ?
+        AND collect_time = (
+            SELECT MAX(collect_time) FROM interface_stats i2
+            WHERE i2.device_id = i1.device_id AND i2.if_name = i1.if_name
+        )
+        ORDER BY if_name
+    ''', (device_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    interfaces = []
+    for row in rows:
+        interfaces.append({
+            'if_name': row['if_name'],
+            'status': row['status'],
+            'in_bytes': row['in_bytes'],
+            'out_bytes': row['out_bytes'],
+            'in_util': row['in_util'],
+            'out_util': row['out_util'],
+            'collect_time': row['collect_time']
+        })
+
+    return interfaces

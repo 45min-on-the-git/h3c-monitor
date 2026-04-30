@@ -7,11 +7,19 @@ __pycache__/
 .venv/
 venv/
 ENV/
+build/
+dist/
+*.egg-info/
 
-# Database (exclude for now, include when ready)
-# *.db
-# *.sqlite
-# *.sqlite3
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# UV
+uv.lock
+.python-version
+main.py
 
 # IDE
 .vscode/

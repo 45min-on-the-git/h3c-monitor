@@ -31,7 +31,7 @@ def collect_device_data(device_config: Dict[str, Any]) -> Dict[str, Any]:
         net_connect.enable()
         
         device_data = {
-            'device_type': device_config.get('device_category', 'switch'),
+            'device_category': device_config.get('device_category', 'switch'),
             'hostname': device_config.get('device_name', ''),
             'ip': device_config['ip'],
             'uptime': None,

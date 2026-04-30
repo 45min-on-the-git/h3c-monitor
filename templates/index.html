@@ -38,6 +38,10 @@
             font-size: 1.5rem;
             z-index: 1000;
         }
+        .device-info-item {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -91,7 +95,7 @@
         </div>
 
         <!-- 指标表格 -->
-        <div class="row">
+        <div class="row mb-4">
             <div class="col">
                 <div class="card">
                     <div class="card-header">
@@ -118,19 +122,51 @@
                 </div>
             </div>
         </div>
+
+        <!-- 接口表格 -->
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> 接口状态</h5>
+                        <span class="badge bg-secondary" id="interfacesCount">0 个接口</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>接口名称</th>
+                                        <th>状态</th>
+                                        <th>入向字节</th>
+                                        <th>出向字节</th>
+                                        <th>入向利用率</th>
+                                        <th>出向利用率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="interfacesTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let devices = [];
         let metrics = [];
+        let currentInterfaces = [];
 
         // 页面加载
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDevices();
             await loadMetrics();
-            await loadAllDeviceCards(); // 显示所有设备卡片
-            
+            await loadAllDeviceCards();
+            await loadInterfacesForAllDevices();
+
             // 设置时间范围
             const now = new Date();
             const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -143,7 +179,7 @@
             try {
                 const response = await fetch('/api/devices');
                 devices = await response.json();
-                
+
                 const select = document.getElementById('deviceSelect');
                 select.innerHTML = '<option value="">全部设备</option>';
                 devices.forEach(device => {
@@ -163,15 +199,15 @@
                 const deviceId = document.getElementById('deviceSelect').value;
                 const startTime = document.getElementById('startTime').value;
                 const endTime = document.getElementById('endTime').value;
-                
+
                 let url = '/api/metrics?';
                 if (deviceId) url += `device_id=${deviceId}&`;
-                if (startTime) url += `start=${startTime}&`;
-                if (endTime) url += `end=${endTime}`;
-                
+                if (startTime) url += `start_time=${startTime}&`;
+                if (endTime) url += `end_time=${endTime}`;
+
                 const response = await fetch(url);
                 metrics = await response.json();
-                
+
                 updateMetricsTable();
             } catch (error) {
                 console.error('加载指标失败:', error);
@@ -182,7 +218,7 @@
         function updateMetricsTable() {
             const tbody = document.getElementById('metricsTable');
             tbody.innerHTML = '';
-            
+
             metrics.slice(0, 20).forEach(metric => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -197,41 +233,144 @@
             });
         }
 
+        // 加载所有设备的接口信息
+        async function loadInterfacesForAllDevices() {
+            const deviceId = document.getElementById('deviceSelect').value;
+            if (!deviceId) {
+                // 全部设备：聚合所有接口
+                currentInterfaces = [];
+                for (const device of devices) {
+                    try {
+                        const resp = await fetch(`/api/interfaces/${device.id}`);
+                        const ifs = await resp.json();
+                        currentInterfaces.push(...ifs.map(i => ({ ...i, device_ip: device.ip })));
+                    } catch (e) {}
+                }
+            } else {
+                currentInterfaces = await loadInterfacesByDevice(deviceId);
+            }
+            updateInterfacesTable();
+        }
+
+        // 按设备加载接口
+        async function loadInterfacesByDevice(deviceId) {
+            try {
+                const response = await fetch(`/api/interfaces/${deviceId}`);
+                return await response.json();
+            } catch (error) {
+                console.error('加载接口失败:', error);
+                return [];
+            }
+        }
+
+        // 更新接口表格
+        function updateInterfacesTable() {
+            const tbody = document.getElementById('interfacesTable');
+            const countBadge = document.getElementById('interfacesCount');
+            tbody.innerHTML = '';
+
+            if (!currentInterfaces || currentInterfaces.length === 0) {
+                countBadge.textContent = '0 个接口';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无接口数据</td></tr>';
+                return;
+            }
+
+            countBadge.textContent = `${currentInterfaces.length} 个接口`;
+
+            currentInterfaces.forEach(iface => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${iface.if_name}</strong>${iface.device_ip ? `<small class="text-muted ms-2">${iface.device_ip}</small>` : ''}</td>
+                    <td>
+                        <span class="badge ${iface.status === 'UP' ? 'bg-success' : 'bg-danger'}">
+                            ${iface.status === 'UP' ? 'UP' : 'DOWN'}
+                        </span>
+                    </td>
+                    <td>${formatBytes(iface.in_bytes)}</td>
+                    <td>${formatBytes(iface.out_bytes)}</td>
+                    <td>${iface.in_util !== null ? iface.in_util.toFixed(1) + '%' : '-'}</td>
+                    <td>${iface.out_util !== null ? iface.out_util.toFixed(1) + '%' : '-'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 字节数格式化
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined || bytes === 0) return '-';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+        }
+
         // 加载设备数据（显示在卡片中）
         async function loadDeviceData() {
             const deviceId = document.getElementById('deviceSelect').value;
             const container = document.getElementById('devicesContainer');
-            
+
             if (!deviceId) {
-                // 如果选择了"全部"，加载所有设备卡片
                 await loadAllDeviceCards();
+                await loadInterfacesForAllDevices();
                 return;
             }
-            
+
             const device = devices.find(d => d.id == deviceId);
             if (!device) return;
-            
+
             try {
-                const response = await fetch(`/api/metrics/latest/${deviceId}`);
-                const metric = await response.json();
-                
+                const [metricResp, ifResp] = await Promise.all([
+                    fetch(`/api/metrics/latest/${deviceId}`),
+                    fetch(`/api/interfaces/${deviceId}`)
+                ]);
+                const metric = await metricResp.json();
+                const ifs = await ifResp.json();
+                currentInterfaces = ifs;
+                updateInterfacesTable();
+
                 container.innerHTML = `
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <h6 class="card-title">${device.device_name || device.hostname}</h6>
-                                <p class="text-muted mb-2">${device.ip}</p>
-                                <div class="d-flex justify-content-between">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <div class="metric-label">CPU</div>
-                                        <div class="metric-value">${metric.cpu_usage ? metric.cpu_usage.toFixed(1) + '%' : '-'}</div>
+                                        <h5 class="card-title">${device.device_name || device.hostname || device.ip}</h5>
+                                        <p class="text-muted mb-1">${device.ip}</p>
+                                        <span class="badge ${device.device_category === 'firewall' ? 'bg-danger' : 'bg-info'}">
+                                            ${device.device_category === 'firewall' ? '防火墙' : '交换机'}
+                                        </span>
                                     </div>
-                                    <div>
-                                        <div class="metric-label">内存</div>
-                                        <div class="metric-value">${metric.mem_usage ? metric.mem_usage.toFixed(1) + '%' : '-'}</div>
+                                    <div class="text-end">
+                                        <div class="device-info-item">型号：${device.model || '-'}</div>
+                                        <div class="device-info-item">版本：${device.sw_version || '-'}</div>
                                     </div>
                                 </div>
-                                <p class="text-muted mb-0"><small>${new Date(metric.collect_time).toLocaleString('zh-CN')}</small></p>
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="metric-label">CPU</div>
+                                        <div class="metric-value ${metric.cpu_usage > 80 ? 'text-danger' : ''}">${metric.cpu_usage ? metric.cpu_usage.toFixed(1) + '%' : '-'}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-label">内存</div>
+                                        <div class="metric-value ${metric.mem_usage > 80 ? 'text-danger' : ''}">${metric.mem_usage ? metric.mem_usage.toFixed(1) + '%' : '-'}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-label">温度</div>
+                                        <div class="metric-value">${metric.temperature ? metric.temperature.toFixed(1) + '°C' : '-'}</div>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="metric-label">会话数</div>
+                                        <div class="metric-value">${metric.session_count !== null ? metric.session_count : '-'}</div>
+                                    </div>
+                                    <div class="col-8">
+                                        <div class="metric-label">运行时间</div>
+                                        <div class="metric-value" style="font-size:1rem">${metric.uptime || '-'}</div>
+                                    </div>
+                                </div>
+                                <p class="text-muted mb-0 mt-2"><small>更新时间：${metric.collect_time ? new Date(metric.collect_time).toLocaleString('zh-CN') : '-'}</small></p>
                             </div>
                         </div>
                     </div>
@@ -244,38 +383,54 @@
         // 加载所有设备卡片
         async function loadAllDeviceCards() {
             const container = document.getElementById('devicesContainer');
-            container.innerHTML = '';
-            
+            container.innerHTML = '<div class="col-12 text-center text-muted">加载中...</div>';
+
+            const cards = [];
             for (const device of devices) {
                 try {
                     const response = await fetch(`/api/metrics/latest/${device.id}`);
+                    if (!response.ok) continue;
                     const metric = await response.json();
-                    
-                    const card = document.createElement('div');
-                    card.className = 'col-md-6 col-lg-3 mb-3';
-                    card.innerHTML = `
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">${device.device_name || device.hostname}</h6>
-                                <p class="text-muted mb-2">${device.ip}</p>
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <div class="metric-label">CPU</div>
-                                        <div class="metric-value">${metric.cpu_usage !== null ? metric.cpu_usage.toFixed(1) + '%' : '-'}</div>
-                                    </div>
-                                    <div>
-                                        <div class="metric-label">内存</div>
-                                        <div class="metric-value">${metric.mem_usage !== null ? metric.mem_usage.toFixed(1) + '%' : '-'}</div>
-                                    </div>
-                                </div>
-                                <p class="text-muted mb-0"><small>${metric.collect_time ? new Date(metric.collect_time).toLocaleString('zh-CN') : '-'}</small></p>
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(card);
+                    cards.push({ device, metric });
                 } catch (error) {
                     console.error(`加载 ${device.ip} 失败:`, error);
                 }
+            }
+
+            container.innerHTML = '';
+            cards.forEach(({ device, metric }) => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 col-lg-3 mb-3';
+                card.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">${device.device_name || device.hostname || device.ip}</h6>
+                                <span class="badge ${device.device_category === 'firewall' ? 'bg-danger' : 'bg-info'} small">
+                                    ${device.device_category === 'firewall' ? '防火墙' : '交换机'}
+                                </span>
+                            </div>
+                            <p class="text-muted mb-1" style="font-size:0.8rem">${device.ip}</p>
+                            <p class="text-muted mb-2" style="font-size:0.7rem">${device.model || ''} ${device.sw_version || ''}</p>
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="metric-label">CPU</div>
+                                    <div class="metric-value ${metric.cpu_usage > 80 ? 'text-danger' : ''}">${metric.cpu_usage !== null ? metric.cpu_usage.toFixed(1) + '%' : '-'}</div>
+                                </div>
+                                <div>
+                                    <div class="metric-label">内存</div>
+                                    <div class="metric-value ${metric.mem_usage > 80 ? 'text-danger' : ''}">${metric.mem_usage !== null ? metric.mem_usage.toFixed(1) + '%' : '-'}</div>
+                                </div>
+                            </div>
+                            <p class="text-muted mb-0 mt-2"><small>${metric.collect_time ? new Date(metric.collect_time).toLocaleString('zh-CN') : '-'}</small></p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            if (cards.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted">暂无设备数据</div>';
             }
         }
 
@@ -285,18 +440,19 @@
                 const btn = document.querySelector('button[onclick="collectAll()"]');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 采集中...';
-                
+
                 const response = await fetch('/api/collect/all', { method: 'POST' });
                 const result = await response.json();
-                
+
                 if (result.success) {
                     alert(`采集完成：${result.success_count}/${result.total} 成功`);
                     await loadDevices();
                     await loadMetrics();
-                    await loadAllDeviceCards(); // 重新加载所有设备卡片
+                    await loadAllDeviceCards();
+                    await loadInterfacesForAllDevices();
                 } else {
-                    const errorMsg = result.failures && result.failures.length > 0 
-                        ? result.failures[0].error || '未知错误' 
+                    const errorMsg = result.failures && result.failures.length > 0
+                        ? result.failures[0].error || '未知错误'
                         : '未知错误';
                     alert('采集失败：' + errorMsg);
                 }

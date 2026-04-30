@@ -121,41 +121,11 @@ async def get_latest_metrics(device_id: int):
     return JSONResponse(content=metrics)
 
 
-@app.get("/api/collect/{device_ip}")
-async def collect_device(device_ip: str):
-    """手动采集单台设备数据"""
-    # 查找设备配置
-    device_config = None
-    for dev in config.DEVICE_LIST:
-        if dev['ip'] == device_ip:
-            device_config = dev
-            break
-    
-    if not device_config:
-        raise HTTPException(status_code=404, detail="Device not found")
-    
-    # 采集数据
-    result = collector.collect_device_data(device_config)
-    
-    if not result['success']:
-        raise HTTPException(status_code=500, detail=result['error'])
-    
-    data = result['data']
-    
-    # 保存到数据库
-    device_id = database.get_or_create_device(data)
-    database.save_metrics(device_id, {
-        'cpu_usage': data.get('cpu_usage'),
-        'mem_usage': data.get('mem_usage'),
-        'temperature': data.get('temperature'),
-        'session_count': data.get('session_count'),
-        'uptime': data.get('uptime')
-    })
-    
-    # 保存接口信息
-    database.save_interfaces(device_id, data.get('interfaces', []))
-    
-    return JSONResponse(content={'success': True, 'data': data})
+@app.get("/api/interfaces/{device_id}")
+async def get_interfaces(device_id: int):
+    """获取设备最新接口信息"""
+    interfaces = database.get_latest_interfaces(device_id)
+    return JSONResponse(content=interfaces)
 
 
 @app.post("/api/collect/all")
