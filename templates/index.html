@@ -37,6 +37,9 @@
             font-size: 0.8rem;
             color: #6c757d;
         }
+        #metricsChart {
+            min-height: 300px;
+        }
     </style>
 </head>
 <body>
@@ -174,15 +177,20 @@
             const deviceId = document.getElementById('deviceSelect').value;
 
             if (!deviceId) {
+                // 全部设备：显示设备卡片，隐藏图表
+                showChartPlaceholder(true);
                 await loadAllDeviceCards();
                 await loadInterfacesForAllDevices();
-                showChartPlaceholder(true);
                 return;
             }
 
+            // 单设备：先显示图表区域（loading 态），再加载数据
+            showChartPlaceholder(false);
+            document.getElementById('chartPlaceholder').textContent = '加载中...';
+            document.getElementById('chartPlaceholder').style.display = 'block';
+
             await loadDeviceData(deviceId);
             await loadMetricsForChart(deviceId);
-            showChartPlaceholder(false);
         }
 
         // 显示/隐藏图表占位
@@ -230,7 +238,15 @@
 
         // 渲染指标图表
         function renderMetricsChart() {
-            if (!metrics || metrics.length === 0) return;
+            if (!metrics || metrics.length === 0) {
+                document.getElementById('chartPlaceholder').textContent = '该时间范围内暂无数据';
+                document.getElementById('chartPlaceholder').style.display = 'block';
+                document.getElementById('metricsChart').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('chartPlaceholder').style.display = 'none';
+            document.getElementById('metricsChart').style.display = 'block';
 
             const showCpu = document.getElementById('showCpu').checked;
             const showMem = document.getElementById('showMem').checked;
@@ -295,6 +311,7 @@
                 data: { labels, datasets },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     interaction: {
                         intersect: false,
                         mode: 'index'
