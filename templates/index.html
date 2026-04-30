@@ -75,11 +75,11 @@
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">开始时间</label>
-                                <input type="datetime-local" class="form-control" id="startTime">
+                                <input type="datetime-local" class="form-control" id="startTime" onchange="onTimeRangeChanged()">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">结束时间</label>
-                                <input type="datetime-local" class="form-control" id="endTime">
+                                <input type="datetime-local" class="form-control" id="endTime" onchange="onTimeRangeChanged()">
                             </div>
                         </div>
                     </div>
@@ -167,10 +167,20 @@
             await loadInterfacesForAllDevices();
 
             const now = new Date();
-            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-            document.getElementById('endTime').value = now.toISOString().slice(0, 16);
-            document.getElementById('startTime').value = oneHourAgo.toISOString().slice(0, 16);
+            const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+            document.getElementById('endTime').value = toDatetimeLocal(now);
+            document.getElementById('startTime').value = toDatetimeLocal(fiveHoursAgo);
         });
+
+        // 转换 Date 为 datetime-local 格式（本地时间，YYYY-MM-DDTHH:MM）
+        function toDatetimeLocal(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            return `${y}-${m}-${d}T${hh}:${mm}`;
+        }
 
         // 设备选择变化
         async function onDeviceChanged() {
@@ -199,6 +209,16 @@
             document.getElementById('metricsChart').style.display = show ? 'none' : 'block';
         }
 
+        // 时间范围变化时重新加载图表
+        async function onTimeRangeChanged() {
+            const deviceId = document.getElementById('deviceSelect').value;
+            if (!deviceId) return;
+            document.getElementById('chartPlaceholder').textContent = '加载中...';
+            document.getElementById('chartPlaceholder').style.display = 'block';
+            document.getElementById('metricsChart').style.display = 'none';
+            await loadMetricsForChart(deviceId);
+        }
+
         // 加载设备列表
         async function loadDevices() {
             try {
@@ -225,8 +245,8 @@
                 const endTime = document.getElementById('endTime').value;
 
                 let url = `/api/metrics?device_id=${deviceId}`;
-                if (startTime) url += `&start_time=${startTime}`;
-                if (endTime) url += `&end_time=${endTime}`;
+                if (startTime) url += `&start_time=${startTime.replace('T', ' ')}`;
+                if (endTime) url += `&end_time=${endTime.replace('T', ' ')}`;
 
                 const response = await fetch(url);
                 metrics = await response.json();
