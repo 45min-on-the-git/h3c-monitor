@@ -7,7 +7,7 @@ from typing import Optional
 import os
 import uvicorn
 import config
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 import database
@@ -28,7 +28,7 @@ templates = Jinja2Templates(directory="templates")
 database.init_db()
 
 # 创建 APScheduler
-scheduler = AsyncIOScheduler()
+scheduler = BlockingScheduler()
 
 
 def auto_collect():
