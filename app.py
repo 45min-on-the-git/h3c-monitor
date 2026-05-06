@@ -51,7 +51,7 @@ def auto_collect():
             database.save_interfaces(device_id, data.get('interfaces', []))
             success_count += 1
         else:
-            print(f"Failed to collect {data.get('ip', 'unknown')}: {result['error']}")
+            print(f"Failed to collect {device_config['ip']}: {result['error']}")
 
     print(f"Auto collection complete: {success_count}/{len(results)} success")
 
@@ -205,6 +205,11 @@ async def get_available_devices():
     return JSONResponse(content=config.DEVICE_LIST)
 
 
+def main():
+    """启动 FastAPI 服务"""
+    uvicorn.run(app, host="0.0.0.0", port=9001)
+
+
 # 配置端口
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=9001)
+    main()

@@ -1,6 +1,5 @@
 # 采集器模块 - Netmiko + TextFSM
 from netmiko import ConnectHandler
-from textfsm import TextFSM
 from typing import Dict, List, Optional, Any
 import config  # noqa: F401
 import re
