@@ -52,9 +52,8 @@
     </div>
 </div>
 
-<!-- 设备编辑弹窗（hidden by default） -->
-<div class="modal" id="deviceModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;
-    background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+<!-- 设备编辑弹窗 -->
+<div class="modal" id="deviceModal">
     <div class="card" style="min-width:560px;max-width:640px;max-height:85vh;overflow-y:auto">
         <div class="card-header flex-between">
             <span id="deviceModalTitle">编辑设备</span>
@@ -141,7 +140,7 @@
 </div>
 
 <style>
-.modal { display: none; }
+.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
 .modal.open { display: flex; }
 </style>
 

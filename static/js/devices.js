@@ -4,8 +4,36 @@ let _allDevices = [];
 
 document.addEventListener('DOMContentLoaded', loadDeviceList);
 
+/* === Toast === */
+function showToast(msg, type) {
+    const t = document.createElement('div');
+    t.style.cssText = [
+        'position:fixed;top:60px;right:20px;z-index:9999;padding:12px 20px',
+        'border-radius:6px;font-size:13px;font-weight:500;color:#fff',
+        'animation:toastIn 0.3s ease;max-width:360px;box-shadow:0 4px 12px rgba(0,0,0,0.3)',
+        type === 'success' ? 'background:#2b8a3e' : 'background:#c92a2a',
+    ].join(';');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 2500);
+    setTimeout(() => t.remove(), 3000);
+}
+
+if (!document.getElementById('toastStyle')) {
+    const s = document.createElement('style');
+    s.id = 'toastStyle';
+    s.textContent = '@keyframes toastIn { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }';
+    document.head.appendChild(s);
+}
+
+/* === Load === */
 async function loadDeviceList() {
-    _allDevices = await API.get('/api/devices') || [];
+    try {
+        _allDevices = await API.get('/api/devices') || [];
+    } catch(e) {
+        _allDevices = [];
+        showToast('加载设备列表失败: ' + e.message, 'error');
+    }
     renderDeviceList();
 }
 
@@ -50,7 +78,7 @@ function renderDeviceList() {
     `).join('');
 }
 
-/* === 设备编辑 === */
+/* === Form === */
 function showDeviceForm() {
     document.getElementById('deviceModalTitle').textContent = '添加设备';
     document.getElementById('deviceForm').reset();
@@ -101,15 +129,39 @@ document.getElementById('deviceForm').addEventListener('submit', async (e) => {
         contract_no: document.getElementById('deviceFormContract').value,
     };
 
+    const opLabel = id ? '更新' : '添加';
+    const btn = document.querySelector('#deviceForm button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
     try {
+        let resp;
         if (id) {
-            await API.put(`/api/devices/${id}`, body);
+            resp = await fetch(`/api/devices/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
         } else {
-            await API.post('/api/devices', body);
+            resp = await fetch('/api/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
         }
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `${opLabel}失败 (${resp.status})`);
+        }
+
+        showToast(`设备 ${opLabel}成功`, 'success');
         closeDeviceForm();
         await loadDeviceList();
     } catch (err) {
-        alert('保存失败: ' + err.message);
+        showToast(`${opLabel}失败: ${err.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '保存';
     }
 });
