@@ -99,7 +99,7 @@ class H3CSSHDriver(DeviceDriver):
         brief = self.execute_command("display interface brief", read_timeout=30)
         for line in brief.strip().split("\n"):
             m = re.match(
-                r"\s*(GE\d+/\d+|H?GE\d+/\d+/\d+|MEth\d+/0/0|MGE\d+/\d+/\d+|InLoop\d+|NULL\d+|REG\d+)",
+                r"\s*([HX]?GE\d+/\d+/\d+|GE\d+/\d+|MEth\d+/0/0|MGE\d+/\d+/\d+|InLoop\d+|NULL\d+|REG\d+)",
                 line,
             )
             if m:
@@ -176,7 +176,7 @@ class H3CSSHDriver(DeviceDriver):
             line = line.strip()
             # 匹配详细接口名
             m = re.match(
-                r"(Ten-GigabitEthernet\d+/\d+/\d+|GigabitEthernet\d+/\d+/\d+|Ethernet\d+/\d+|Vlan-interface\d+|MEth\d+)",
+                r"(Ten-GigabitEthernet\d+/\d+/\d+|GigabitEthernet\d+/\d+/\d+|FortyGigE\d+/\d+/\d+|HundredGigE\d+/\d+/\d+|Ethernet\d+/\d+|Vlan-interface\d+|MEth\d+)",
                 line,
             )
             if m:
@@ -203,12 +203,20 @@ class H3CSSHDriver(DeviceDriver):
                 in_bytes=in_bytes, out_bytes=out_bytes,
             )
 
-        # 合并到 brief 列表：按名称模糊匹配
+        # 合并到 brief 列表：提取接口编号（如 1/0/1）精确匹配
+        def _if_index(name: str) -> str:
+            m = re.match(r"[A-Za-z-]+(.+)", name)
+            return m.group(1) if m else name
+
         for iface in interfaces:
+            idx = _if_index(iface.if_name)
             for dname, di in detail_ifaces.items():
-                if iface.if_name.replace("/", "") in dname.replace("/", ""):
+                if idx == _if_index(dname):
                     iface.in_bytes = di.in_bytes
                     iface.out_bytes = di.out_bytes
+                    # 尝试从 detail 补全 if_speed
+                    if di.if_speed:
+                        iface.if_speed = di.if_speed
                     break
 
         return interfaces

@@ -4,12 +4,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional
-import threading
 import os
 import uvicorn
 import config
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from datetime import datetime
 
 import database
 import collector
@@ -27,8 +27,8 @@ templates = Jinja2Templates(directory="templates")
 # 数据库
 database.init_db()
 
-# APScheduler
-scheduler = BlockingScheduler()
+# APScheduler — BackgroundScheduler 适合非阻塞后台运行
+scheduler = BackgroundScheduler()
 
 
 def _save_and_alarm(data: dict) -> int:
@@ -42,12 +42,14 @@ def _save_and_alarm(data: dict) -> int:
         "uptime": data.get("uptime"),
     })
     database.save_interfaces(device_id, data.get("interfaces", []))
-    # 告警检查
+    # 告警检查：从接口列表计算实际状态
+    interfaces = data.get("interfaces", [])
+    down_count = sum(1 for i in interfaces if i.get("status") != "UP")
     alarm.check_and_trigger(device_id, {
         "cpu_usage": data.get("cpu_usage"),
         "mem_usage": data.get("mem_usage"),
         "temperature": data.get("temperature"),
-        "interface_status": "UP",  # 基于最新接口状态
+        "interfaces_down": down_count,
     })
     return device_id
 
@@ -68,17 +70,15 @@ def auto_collect():
     print(f"Auto collection complete: {success_count}/{len(results)} success")
 
 
-# 启动时采集
-auto_collect()
-
+# 添加周期性采集任务，同时立即触发首次采集
 scheduler.add_job(
     auto_collect,
     trigger=IntervalTrigger(minutes=config.COLLECT_INTERVAL),
+    next_run_time=datetime.now(),  # 启动后立即执行一次
     id="auto_collect",
     replace_existing=True,
 )
-scheduler_thread = threading.Thread(target=scheduler.start, daemon=True)
-scheduler_thread.start()
+scheduler.start()
 
 
 # ══════ 页面路由 ══════

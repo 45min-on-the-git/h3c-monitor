@@ -112,9 +112,9 @@ class H3CSNMPDriver(DeviceDriver):
         if_statuses = self._walk_table(OID["ifOperStatus"])
         in_octets = self._walk_table(OID["ifHCInOctets"])
         out_octets = self._walk_table(OID["ifHCOutOctets"])
-        speeds = self._walk_table(OID["ifHighSpeed"])
-        if not speeds:
-            speeds = self._walk_table(OID["ifSpeed"])
+        speeds_high = self._walk_table(OID["ifHighSpeed"])
+        speeds = self._walk_table(OID["ifSpeed"])
+        use_high = bool(speeds_high)
 
         interfaces = []
         for idx, name in if_names.items():
@@ -124,9 +124,9 @@ class H3CSNMPDriver(DeviceDriver):
                 in_bytes=int(in_octets.get(idx, 0)),
                 out_bytes=int(out_octets.get(idx, 0)),
             )
-            s = speeds.get(idx, 0)
+            s = speeds_high.get(idx) if use_high else speeds.get(idx, 0)
             if s:
-                iface.if_speed = int(s) if s > 1000 else int(s) * 1000000
+                iface.if_speed = int(s) * 1000000 if use_high else int(s)
             interfaces.append(iface)
 
         return interfaces

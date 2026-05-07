@@ -4,14 +4,6 @@ import config
 from driver import get_driver, get_ssh_driver
 
 
-def _format_result(driver, data: Dict[str, Any]) -> Dict[str, Any]:
-    """将驱动采集的分散数据合并为标准结果"""
-    return {
-        "success": True,
-        "data": data,
-    }
-
-
 def collect_device_data(device_config: Dict[str, Any]) -> Dict[str, Any]:
     """
     采集单台设备数据。
