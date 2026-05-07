@@ -61,6 +61,7 @@ def init_db():
         out_bytes INTEGER,
         in_util REAL,
         out_util REAL,
+        if_speed INTEGER DEFAULT 0,
         FOREIGN KEY (device_id) REFERENCES devices(id)
     )
     ''')
@@ -93,6 +94,11 @@ def init_db():
         FOREIGN KEY (device_id) REFERENCES devices(id)
     )
     ''')
+
+    # 迁移：加 if_speed 列
+    existing = {row[1] for row in cursor.execute("PRAGMA table_info(interface_stats)")}
+    if "if_speed" not in existing:
+        cursor.execute("ALTER TABLE interface_stats ADD COLUMN if_speed INTEGER DEFAULT 0")
 
     # 索引
     cursor.execute('''
@@ -295,7 +301,7 @@ def save_interfaces(device_id: int, interfaces: List[Dict[str, Any]]):
     cursor = conn.cursor()
     for iface in interfaces:
         cursor.execute(
-            "INSERT INTO interface_stats (device_id, collect_time, if_name, status, in_bytes, out_bytes, in_util, out_util) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO interface_stats (device_id, collect_time, if_name, status, in_bytes, out_bytes, in_util, out_util, if_speed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 device_id,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -305,6 +311,7 @@ def save_interfaces(device_id: int, interfaces: List[Dict[str, Any]]):
                 iface.get("out_bytes"),
                 iface.get("in_util"),
                 iface.get("out_util"),
+                iface.get("if_speed", 0),
             ),
         )
     conn.commit()
@@ -405,6 +412,7 @@ def get_latest_interfaces(device_id: int) -> List[Dict[str, Any]]:
             "out_bytes": row["out_bytes"],
             "in_util": row["in_util"],
             "out_util": row["out_util"],
+            "if_speed": row["if_speed"],
             "collect_time": row["collect_time"],
         }
         for row in rows

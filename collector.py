@@ -72,6 +72,7 @@ def _collect_via_driver(driver, device_config: Dict[str, Any]) -> Dict[str, Any]
                         "out_bytes": i.out_bytes,
                         "in_util": i.in_util,
                         "out_util": i.out_util,
+                        "if_speed": getattr(i, "if_speed", 0),
                     }
                     for i in interfaces
                 ],

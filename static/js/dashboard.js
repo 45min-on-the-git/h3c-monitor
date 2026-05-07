@@ -219,19 +219,21 @@ function renderInterfaces() {
     if (statusFilter) filtered = filtered.filter(i => i.status === statusFilter);
 
     if (!filtered.length) {
-        tbody.innerHTML = '<tr class="table-empty"><td colspan="6">暂无接口数据</td></tr>';
+        tbody.innerHTML = '<tr class="table-empty"><td colspan="7">暂无接口数据</td></tr>';
         return;
     }
 
     tbody.innerHTML = filtered.map(i => {
-        const util = i.in_util || 0;
+        const util = Math.max(i.in_util || 0, i.out_util || 0);
         const utilColor = util > 80 ? 'var(--danger)' : util > 50 ? 'var(--warning)' : 'var(--success)';
+        const speed = i.if_speed ? Util.formatBps(i.if_speed) : '-';
         return `<tr style="cursor:pointer" onclick="showTrafficChart(${i._device_id}, '${Util.escapeHtml(i.if_name)}')">
             <td><strong>${Util.escapeHtml(i.if_name)}</strong></td>
             <td><span class="text-muted" style="font-size:12px">${Util.escapeHtml(i._device_ip || '')}</span></td>
             <td><span class="badge ${i.status === 'UP' ? 'badge-success' : 'badge-danger'}">${i.status}</span></td>
             <td>${Util.formatBytes(i.in_bytes)}</td>
             <td>${Util.formatBytes(i.out_bytes)}</td>
+            <td style="font-size:12px">${speed}</td>
             <td><span style="color:${utilColor};font-weight:600">${util.toFixed(1)}%</span></td>
         </tr>`;
     }).join('');

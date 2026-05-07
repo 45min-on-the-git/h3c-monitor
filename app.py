@@ -214,6 +214,14 @@ async def collect_device(device_ip: str):
 
 # ══════ 告警 API ══════
 
+@app.get("/api/alarms/count")
+async def get_alarm_count():
+    """快速获取活跃/已确认告警计数"""
+    active = alarm.get_alarms(status="active")
+    acked = alarm.get_alarms(status="acknowledged")
+    return JSONResponse(content={"active": len(active), "acknowledged": len(acked)})
+
+
 @app.get("/api/alarms")
 async def get_alarms(status: Optional[str] = None, device_id: Optional[int] = None):
     return JSONResponse(content=alarm.get_alarms(status=status, device_id=device_id))

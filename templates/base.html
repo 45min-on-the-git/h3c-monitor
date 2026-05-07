@@ -74,18 +74,38 @@
         link.classList.toggle('active', link.getAttribute('data-path') === path);
     });
 })();
-// 加载告警数量
-(async function() {
+
+// 告警轮询（30s）
+let _lastAlarmCount = -1;
+async function pollAlarms() {
     try {
-        const alarms = await API.get('/api/alarms?status=active');
-        if (alarms && alarms.length > 0) {
-            const badge = document.getElementById('alarmBadge');
-            badge.textContent = alarms.length;
+        const data = await API.get('/api/alarms/count');
+        const count = data?.active || 0;
+        const badge = document.getElementById('alarmBadge');
+        const indicator = document.getElementById('alarmIndicator');
+
+        if (count > 0) {
+            badge.textContent = count;
             badge.style.display = '';
-            document.getElementById('alarmIndicator').classList.add('active');
+            indicator.classList.add('active');
+            // 新告警弹窗
+            if (_lastAlarmCount >= 0 && count > _lastAlarmCount) {
+                showAlarmToast(count, count - _lastAlarmCount);
+            }
+        } else {
+            badge.style.display = 'none';
+            indicator.classList.remove('active');
         }
+        _lastAlarmCount = count;
     } catch(e) {}
-})();
+}
+function showAlarmToast(total, newCount) {
+    if (typeof showToast === 'function') {
+        showToast(`${newCount} 条新告警，共 ${total} 条活跃告警`, 'error');
+    }
+}
+pollAlarms();
+setInterval(pollAlarms, 30000);
 </script>
 
 {% block scripts %}{% endblock %}
