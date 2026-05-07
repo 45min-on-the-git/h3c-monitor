@@ -106,6 +106,48 @@ def init_db():
     )
     ''')
 
+    # 端口分配台账
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS port_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id INTEGER NOT NULL,
+        if_name TEXT NOT NULL,
+        connected_device TEXT,
+        connected_port TEXT,
+        description TEXT,
+        FOREIGN KEY (device_id) REFERENCES devices(id)
+    )
+    ''')
+
+    # 变更审计
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id INTEGER,
+        action TEXT NOT NULL,
+        detail TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
+
+    # VLAN 台账
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS vlan_registry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id INTEGER,
+        vlan_id INTEGER NOT NULL,
+        name TEXT,
+        subnet_id INTEGER,
+        purpose TEXT,
+        FOREIGN KEY (device_id) REFERENCES devices(id)
+    )
+    ''')
+
+    # migrate devices status column
+    existing_dev = {row[1] for row in cursor.execute("PRAGMA table_info(devices)")}
+    if "status" not in existing_dev:
+        cursor.execute("ALTER TABLE devices ADD COLUMN status TEXT DEFAULT 'online'")
+
     # 配置备份表
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS config_backups (
@@ -317,6 +359,7 @@ def get_devices() -> List[Dict[str, Any]]:
             "rack": d.get("rack"),
             "role": d.get("role"),
             "tags": d.get("tags"),
+            "status": d.get("status", "online"),
         })
 
     conn.close()
@@ -665,5 +708,106 @@ def template_update(template_id: int, **kwargs):
 def template_delete(template_id: int):
     conn = get_db_connection()
     conn.execute("DELETE FROM config_templates WHERE id=?", (template_id,))
+    conn.commit()
+    conn.close()
+
+
+# ══════ 端口分配台账 ══════
+
+def port_assignment_list(device_id: int = None) -> List[Dict]:
+    conn = get_db_connection()
+    if device_id:
+        rows = conn.execute("SELECT * FROM port_assignments WHERE device_id=? ORDER BY if_name", (device_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM port_assignments ORDER BY device_id, if_name").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def port_assignment_set(device_id: int, if_name: str, connected_device: str, connected_port: str, description: str = ""):
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT id FROM port_assignments WHERE device_id=? AND if_name=?", (device_id, if_name)
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE port_assignments SET connected_device=?, connected_port=?, description=? WHERE id=?",
+            (connected_device, connected_port, description, row["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO port_assignments (device_id, if_name, connected_device, connected_port, description) VALUES (?,?,?,?,?)",
+            (device_id, if_name, connected_device, connected_port, description),
+        )
+    conn.commit()
+    conn.close()
+
+
+# ══════ 变更审计 ══════
+
+def audit_log(action: str, device_id: int = None, detail: str = ""):
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO audit_logs (device_id, action, detail) VALUES (?,?,?)",
+        (device_id, action, detail),
+    )
+    conn.commit()
+    conn.close()
+
+def audit_list(limit: int = 100) -> List[Dict]:
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ══════ VLAN 台账 ══════
+
+def vlan_registry_list(device_id: int = None) -> List[Dict]:
+    conn = get_db_connection()
+    if device_id:
+        rows = conn.execute("SELECT * FROM vlan_registry WHERE device_id=? ORDER BY vlan_id", (device_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM vlan_registry ORDER BY device_id, vlan_id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def vlan_registry_sync(device_id: int, vlans: List[Dict]):
+    """同步设备 VLAN 到台账（增新不删旧）"""
+    conn = get_db_connection()
+    existing = {r["vlan_id"] for r in conn.execute(
+        "SELECT vlan_id FROM vlan_registry WHERE device_id=?", (device_id,)
+    ).fetchall()}
+    for v in vlans:
+        vid = int(v.get("vlan_id", 0))
+        name = v.get("name", "")
+        if vid in existing:
+            conn.execute(
+                "UPDATE vlan_registry SET name=? WHERE device_id=? AND vlan_id=?",
+                (name, device_id, vid),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO vlan_registry (device_id, vlan_id, name) VALUES (?,?,?)",
+                (device_id, vid, name),
+            )
+    conn.commit()
+    conn.close()
+
+def vlan_registry_update(vlan_reg_id: int, **kwargs):
+    conn = get_db_connection()
+    sets = [f"{k}=?" for k in kwargs]
+    vals = list(kwargs.values()) + [vlan_reg_id]
+    conn.execute(f"UPDATE vlan_registry SET {', '.join(sets)} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+
+
+# ══════ 设备状态 ══════
+
+def set_device_status(device_id: int, status: str):
+    conn = get_db_connection()
+    conn.execute("UPDATE devices SET status=? WHERE id=?", (status, device_id))
     conn.commit()
     conn.close()

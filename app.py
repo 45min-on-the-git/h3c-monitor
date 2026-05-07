@@ -115,6 +115,14 @@ async def page_interfaces(request: Request):
 async def page_templates(request: Request):
     return templates.TemplateResponse(request, "template.html")
 
+@app.get("/audit", response_class=HTMLResponse)
+async def page_audit(request: Request):
+    return templates.TemplateResponse(request, "audit.html")
+
+@app.get("/vlan-registry", response_class=HTMLResponse)
+async def page_vlan_registry(request: Request):
+    return templates.TemplateResponse(request, "vlan_registry.html")
+
 
 # ══════ 设备 API ══════
 
@@ -210,6 +218,7 @@ async def port_shutdown(device_id: int, if_name: str):
         driver.connect()
         driver.port_shutdown(if_name)
         driver.disconnect()
+        database.audit_log("port_shutdown", device_id, if_name)
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -223,6 +232,7 @@ async def port_undo_shutdown(device_id: int, if_name: str):
         driver.connect()
         driver.port_undo_shutdown(if_name)
         driver.disconnect()
+        database.audit_log("port_undo_shutdown", device_id, if_name)
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -236,6 +246,7 @@ async def port_description(device_id: int, if_name: str, body: dict = Body(...))
         driver.connect()
         driver.port_set_description(if_name, body.get("description", ""))
         driver.disconnect()
+        database.audit_log("port_description", device_id, f"{if_name}: {body.get('description','')}")
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -250,6 +261,7 @@ async def port_ip(device_id: int, if_name: str, body: dict = Body(...)):
         driver.connect()
         if hasattr(driver, 'port_set_ip'):
             driver.port_set_ip(if_name, body["ip"], body.get("mask", "255.255.255.0"))
+            database.audit_log("port_ip", device_id, f"{if_name}: {body['ip']}")
         else:
             driver.execute_commands([
                 f"interface {if_name}",
@@ -274,12 +286,74 @@ async def port_vlan(device_id: int, if_name: str, body: dict = Body(...)):
         else:
             driver.port_set_vlan_trunk(if_name, body.get("pvid", 1), body.get("vlan_list", "all"))
         driver.disconnect()
+        database.audit_log("port_vlan", device_id, f"{if_name}: {body.get('mode','access')}")
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ══════ 采集 API ══════
+
+# ══════ 审计日志 API ══════
+
+@app.get("/api/audit-logs")
+async def get_audit_logs(limit: int = 100):
+    return JSONResponse(content=database.audit_list(limit=limit))
+
+
+# ══════ 端口分配 API ══════
+
+@app.get("/api/port-assignments")
+async def port_assignments(device_id: int = None):
+    return JSONResponse(content=database.port_assignment_list(device_id))
+
+@app.post("/api/port-assignments")
+async def port_assignment_set(body: dict = Body(...)):
+    database.port_assignment_set(
+        body["device_id"], body["if_name"],
+        body.get("connected_device", ""), body.get("connected_port", ""),
+        body.get("description", ""),
+    )
+    database.audit_log("port_assignment", body["device_id"], f"{body['if_name']} → {body.get('connected_device','')}")
+    return JSONResponse(content={"success": True})
+
+
+# ══════ VLAN 台账 API ══════
+
+@app.get("/api/vlan-registry")
+async def vlan_registry_list(device_id: int = None):
+    return JSONResponse(content=database.vlan_registry_list(device_id))
+
+@app.post("/api/vlan-registry/sync/{device_id}")
+async def vlan_registry_sync(device_id: int):
+    """从设备同步 VLAN 到台账"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
+        driver.connect()
+        vlans = driver.vlan_list() if hasattr(driver, 'vlan_list') else []
+        driver.disconnect()
+        database.vlan_registry_sync(device_id, vlans)
+        database.audit_log("vlan_sync", device_id, f"synced {len(vlans)} VLANs")
+        return JSONResponse(content={"success": True, "count": len(vlans)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/vlan-registry/{vlan_id}")
+async def vlan_registry_update(vlan_id: int, body: dict = Body(...)):
+    database.vlan_registry_update(vlan_id, **body)
+    return JSONResponse(content={"success": True})
+
+
+# ══════ 设备状态 API ══════
+
+@app.put("/api/devices/{device_id}/status")
+async def set_device_status(device_id: int, body: dict = Body(...)):
+    database.set_device_status(device_id, body["status"])
+    database.audit_log("device_status", device_id, f"status → {body['status']}")
+    return JSONResponse(content={"success": True})
+
 
 @app.post("/api/collect/all")
 async def collect_all():
@@ -412,6 +486,7 @@ async def create_acl_rule(device_id: int, body: dict = Body(...)):
             description=body.get("description", ""),
         )
         driver.disconnect()
+        database.audit_log("acl_create", device_id, f"ACL {body['acl_number']} rule {body['rule_id']}")
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -448,6 +523,7 @@ async def delete_acl_rule(device_id: int, acl_number: int, rule_id: int):
         driver.connect()
         driver.delete_acl_rule(acl_number, rule_id)
         driver.disconnect()
+        database.audit_log("acl_delete", device_id, f"ACL {acl_number} rule {rule_id}")
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -516,6 +592,7 @@ async def vlan_create(device_id: int, body: dict = Body(...)):
         driver.connect()
         if hasattr(driver, 'vlan_create'):
             driver.vlan_create(body["vlan_id"], body.get("name", ""), body.get("description", ""))
+            database.audit_log("vlan_create", device_id, f"VLAN {body['vlan_id']}")
         else:
             driver.execute_commands([
                 f"vlan {body['vlan_id']}",
@@ -539,6 +616,7 @@ async def vlan_delete(device_id: int, vlan_id: int):
         else:
             driver.execute_commands([f"undo vlan {vlan_id}"])
         driver.disconnect()
+        database.audit_log("vlan_delete", device_id, f"VLAN {vlan_id}")
         return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -611,7 +689,69 @@ async def config_backup_now(device_id: int):
         config_text = driver.execute_command("display current-configuration", read_timeout=60)
         driver.disconnect()
         bid = database.config_backup_save(device_id, config_text)
+        database.audit_log("config_backup", device_id)
         return JSONResponse(content={"success": True, "id": bid})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════ 批量下发 API ══════
+
+@app.post("/api/batch/apply")
+async def batch_apply(body: dict = Body(...)):
+    """多设备批量下发配置命令"""
+    device_ids = body.get("device_ids", [])
+    commands = body.get("commands", [])
+    results = []
+    for did in device_ids:
+        try:
+            device_config = _get_device_ssh_config(did)
+            from driver import get_config_driver
+            driver = get_config_driver(device_config)
+            driver.connect()
+            driver.execute_commands(commands)
+            driver.disconnect()
+            database.audit_log("batch_apply", did, f"{len(commands)} commands")
+            results.append({"device_id": did, "success": True})
+        except Exception as e:
+            results.append({"device_id": did, "success": False, "error": str(e)})
+    return JSONResponse(content={"results": results})
+
+
+# ══════ 配置预检查 API ══════
+
+@app.post("/api/config/preview/{device_id}")
+async def config_preview(device_id: int, body: dict = Body(...)):
+    """生成配置预览（模板渲染后的 CLI 文本）"""
+    from jinja2 import Template
+    tmpl = Template(body.get("template_text", ""))
+    try:
+        rendered = tmpl.render(**(body.get("variables", {})))
+        return JSONResponse(content={"rendered": rendered})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ══════ 配置回滚 API ══════
+
+@app.post("/api/config-backups/{device_id}/rollback/{backup_id}")
+async def config_rollback(device_id: int, backup_id: int):
+    """将指定备份写回设备"""
+    device_config = _get_device_ssh_config(device_id)
+    backup = database.config_backup_get(backup_id)
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        # 通过 SSH 写整个配置（危险操作，需确认）
+        lines = backup["config_text"].strip().split("\n")
+        driver.execute_commands(lines)
+        driver.disconnect()
+        database.audit_log("config_rollback", device_id, f"restored backup #{backup_id}")
+        return JSONResponse(content={"success": True})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

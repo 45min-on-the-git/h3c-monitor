@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}VLAN 台账 — H3C Monitor{% endblock %}
+{% block breadcrumb %}VLAN 台账{% endblock %}
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+            <div class="form-group mb-0" style="min-width:240px">
+                <label class="form-label">选择设备</label>
+                <select class="form-select" id="deviceSelect" onchange="loadVlans()"><option value="">全部设备</option></select>
+            </div>
+            <button class="btn btn-outline" id="btnSync" disabled onclick="syncVlans()"><i class="bi bi-arrow-repeat"></i> 同步设备 VLAN</button>
+        </div>
+    </div>
+</div>
+<div class="card">
+    <div class="card-body" style="padding:0">
+        <table class="table"><thead><tr><th>VLAN ID</th><th>名称</th><th>设备</th><th>用途</th></tr></thead>
+            <tbody id="vlanTable"><tr class="table-empty"><td colspan="4">加载中...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let _devices = [];
+document.addEventListener('DOMContentLoaded', async () => {
+    _devices = await API.get('/api/devices') || [];
+    const sel = document.getElementById('deviceSelect');
+    _devices.forEach(d => { const n = d.device_name||d.hostname||d.ip; sel.innerHTML += `<option value="${d.id}">${Util.escapeHtml(n)}</option>`; });
+    loadVlans();
+});
+async function loadVlans() {
+    const did = document.getElementById('deviceSelect').value;
+    document.getElementById('btnSync').disabled = !did;
+    const url = did ? `/api/vlan-registry?device_id=${did}` : '/api/vlan-registry';
+    const vlans = await API.get(url) || [];
+    const tbody = document.getElementById('vlanTable');
+    if (!vlans.length) { tbody.innerHTML = '<tr class="table-empty"><td colspan="4">暂无记录</td></tr>'; return; }
+    tbody.innerHTML = vlans.map(v => {
+        const d = _devices.find(x => x.id === v.device_id);
+        return `<tr><td><span class="badge badge-info">${v.vlan_id}</span></td><td>${Util.escapeHtml(v.name||'-')}</td><td>${(d?.device_name||d?.hostname||d?.ip||'-')}</td><td>${Util.escapeHtml(v.purpose||'-')}</td></tr>`;
+    }).join('');
+}
+async function syncVlans() {
+    const did = document.getElementById('deviceSelect').value;
+    if (!did) return;
+    try { const r = await API.post(`/api/vlan-registry/sync/${did}`); alert(`同步完成: ${r.count} 个 VLAN`); loadVlans(); }
+    catch(e) { alert('同步失败: '+e.message); }
+}
+</script>
+{% endblock %}

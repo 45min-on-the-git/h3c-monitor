@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}变更审计 — H3C Monitor{% endblock %}
+{% block breadcrumb %}变更审计{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="card-body" style="padding:0">
+        <table class="table"><thead><tr><th>时间</th><th>设备</th><th>操作</th><th>详情</th></tr></thead>
+            <tbody id="auditTable"><tr class="table-empty"><td colspan="4">加载中...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const logs = await API.get('/api/audit-logs?limit=200') || [];
+    const tbody = document.getElementById('auditTable');
+    if (!logs.length) { tbody.innerHTML = '<tr class="table-empty"><td colspan="4">暂无记录</td></tr>'; return; }
+    const labels = {port_shutdown:'端口关闭',port_undo_shutdown:'端口启用',port_description:'端口描述',port_vlan:'端口VLAN',port_ip:'端口IP',
+        acl_create:'ACL创建',acl_delete:'ACL删除',vlan_create:'VLAN创建',vlan_delete:'VLAN删除',vlan_sync:'VLAN同步',
+        config_backup:'配置备份',device_status:'设备状态',port_assignment:'端口分配'};
+    tbody.innerHTML = logs.map(l => `<tr>
+        <td>${Util.formatDatetime(l.created_at)}</td><td>${l.device_id || '-'}</td>
+        <td><span class="badge badge-info">${labels[l.action] || l.action}</span></td>
+        <td>${Util.escapeHtml(l.detail || '-')}</td>
+    </tr>`).join('');
+});
+</script>
+{% endblock %}
