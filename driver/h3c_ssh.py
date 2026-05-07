@@ -250,6 +250,39 @@ class H3CSSHDriver(DeviceDriver):
             f"packet-filter {acl_number} {direction}",
         ])
 
+    # ── 端口操作 ──
+
+    def port_shutdown(self, if_name: str) -> str:
+        """shutdown 端口"""
+        return self.execute_commands([f"interface {if_name}", "shutdown"])
+
+    def port_undo_shutdown(self, if_name: str) -> str:
+        """undo shutdown 端口"""
+        return self.execute_commands([f"interface {if_name}", "undo shutdown"])
+
+    def port_set_description(self, if_name: str, description: str) -> str:
+        """设置端口描述"""
+        desc = description if description else " "
+        return self.execute_commands([f"interface {if_name}", f"description {desc}"])
+
+    def port_set_vlan_access(self, if_name: str, vlan_id: int) -> str:
+        """设置端口为 access 模式并绑定 PVID"""
+        return self.execute_commands([
+            f"interface {if_name}",
+            "port link-type access",
+            f"port access vlan {vlan_id}",
+        ])
+
+    def port_set_vlan_trunk(self, if_name: str, pvid: int, vlan_list: str) -> str:
+        """设置端口为 trunk 模式"""
+        cmds = [
+            f"interface {if_name}",
+            "port link-type trunk",
+            f"port trunk pvid vlan {pvid}",
+            f"port trunk permit vlan {vlan_list}",
+        ]
+        return self.execute_commands(cmds)
+
     def _parse_acls(self, output: str) -> List[Dict]:
         """解析 display acl all 输出"""
         rules = []

@@ -95,6 +95,17 @@ def init_db():
     )
     ''')
 
+    # 配置模板表
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS config_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        template_text TEXT NOT NULL,
+        variables TEXT DEFAULT '{}'
+    )
+    ''')
+
     # 配置备份表
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS config_backups (
@@ -616,3 +627,43 @@ def config_backup_get(backup_id: int) -> Optional[Dict]:
     row = conn.execute("SELECT * FROM config_backups WHERE id=?", (backup_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# ══════ 配置模板 ══════
+
+def template_list() -> List[Dict]:
+    conn = get_db_connection()
+    rows = conn.execute("SELECT id, name, description, variables FROM config_templates ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def template_get(template_id: int) -> Optional[Dict]:
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM config_templates WHERE id=?", (template_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def template_create(name: str, description: str, template_text: str, variables: str = "{}") -> int:
+    conn = get_db_connection()
+    c = conn.execute(
+        "INSERT INTO config_templates (name, description, template_text, variables) VALUES (?,?,?,?)",
+        (name, description, template_text, variables),
+    )
+    conn.commit()
+    tid = c.lastrowid
+    conn.close()
+    return tid
+
+def template_update(template_id: int, **kwargs):
+    conn = get_db_connection()
+    sets = [f"{k}=?" for k in kwargs]
+    vals = list(kwargs.values()) + [template_id]
+    conn.execute(f"UPDATE config_templates SET {', '.join(sets)} WHERE id=?", vals)
+    conn.commit()
+    conn.close()
+
+def template_delete(template_id: int):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM config_templates WHERE id=?", (template_id,))
+    conn.commit()
+    conn.close()

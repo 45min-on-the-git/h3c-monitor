@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}配置模板 — H3C Monitor{% endblock %}
+{% block breadcrumb %}配置模板{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header flex-between">
+                <span><i class="bi bi-file-code"></i> 模板列表</span>
+                <button class="btn btn-sm btn-primary" onclick="newTemplate()">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            </div>
+            <div id="templateList" style="max-height:70vh;overflow-y:auto">
+                <div class="text-center text-muted" style="padding:20px">加载中...</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card" id="editCard" style="display:none">
+            <div class="card-header flex-between">
+                <span id="editTitle">编辑模板</span>
+                <div class="flex gap-2">
+                    <button class="btn btn-sm btn-outline" onclick="previewTemplate()"><i class="bi bi-eye"></i> 预览</button>
+                    <button class="btn btn-sm btn-primary" onclick="saveTemplate()"><i class="bi bi-check-lg"></i> 保存</button>
+                    <button class="btn btn-sm btn-outline" onclick="deleteTemplate()" style="color:var(--danger)" id="btnDelete" style="display:none"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label class="form-label">名称</label>
+                    <input type="text" class="form-control" id="editName" placeholder="如 端口基础配置">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">说明</label>
+                    <input type="text" class="form-control" id="editDesc" placeholder="可选描述">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">模板内容 (Jinja2)</label>
+                    <textarea class="form-control" id="editText" rows="12" style="font-family:var(--font-mono);font-size:12px"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="card" id="previewCard" style="display:none">
+            <div class="card-header flex-between">
+                <span><i class="bi bi-eye"></i> 预览</span>
+                <button class="btn btn-sm btn-outline" onclick="document.getElementById('previewCard').style.display='none'"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="card-body">
+                <pre id="previewContent" style="font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;max-height:50vh;overflow:auto"></pre>
+            </div>
+        </div>
+        <div class="text-center text-muted" style="padding:60px 0" id="editPlaceholder">
+            选择或新建模板
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/template.js"></script>
+{% endblock %}

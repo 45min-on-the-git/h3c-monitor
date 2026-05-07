@@ -107,6 +107,14 @@ async def page_ipam(request: Request):
 async def page_config(request: Request):
     return templates.TemplateResponse(request, "config.html")
 
+@app.get("/interfaces", response_class=HTMLResponse)
+async def page_interfaces(request: Request):
+    return templates.TemplateResponse(request, "interfaces.html")
+
+@app.get("/templates", response_class=HTMLResponse)
+async def page_templates(request: Request):
+    return templates.TemplateResponse(request, "template.html")
+
 
 # ══════ 设备 API ══════
 
@@ -189,6 +197,65 @@ async def get_interface_traffic(
     limit = max(hours * 12, 10)  # 每5分钟采集一次，12条/小时
     data = database.get_interface_traffic(device_id, if_name, limit=limit)
     return JSONResponse(content=data)
+
+
+# ══════ 端口操作 API ══════
+
+@app.post("/api/interfaces/{device_id}/{if_name}/shutdown")
+async def port_shutdown(device_id: int, if_name: str):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        driver.port_shutdown(if_name)
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/interfaces/{device_id}/{if_name}/undo-shutdown")
+async def port_undo_shutdown(device_id: int, if_name: str):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        driver.port_undo_shutdown(if_name)
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/interfaces/{device_id}/{if_name}/description")
+async def port_description(device_id: int, if_name: str, body: dict = Body(...)):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        driver.port_set_description(if_name, body.get("description", ""))
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/interfaces/{device_id}/{if_name}/vlan")
+async def port_vlan(device_id: int, if_name: str, body: dict = Body(...)):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        mode = body.get("mode", "access")
+        if mode == "access":
+            driver.port_set_vlan_access(if_name, body["vlan_id"])
+        else:
+            driver.port_set_vlan_trunk(if_name, body.get("pvid", 1), body.get("vlan_list", "all"))
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ══════ 采集 API ══════
@@ -400,6 +467,49 @@ async def ipam_set_allocation(subnet_id: int, body: dict = Body(...)):
         body.get("description", ""),
     )
     return JSONResponse(content={"success": True})
+
+
+# ══════ 配置模板 API ══════
+
+@app.get("/api/templates")
+async def template_list():
+    return JSONResponse(content=database.template_list())
+
+@app.get("/api/templates/{template_id}")
+async def template_get(template_id: int):
+    t = database.template_get(template_id)
+    if not t:
+        raise HTTPException(status_code=404)
+    return JSONResponse(content=t)
+
+@app.post("/api/templates")
+async def template_create(body: dict = Body(...)):
+    tid = database.template_create(
+        body["name"], body.get("description", ""),
+        body["template_text"], body.get("variables", "{}"),
+    )
+    return JSONResponse(content={"success": True, "id": tid})
+
+@app.put("/api/templates/{template_id}")
+async def template_update(template_id: int, body: dict = Body(...)):
+    database.template_update(template_id, **body)
+    return JSONResponse(content={"success": True})
+
+@app.delete("/api/templates/{template_id}")
+async def template_delete(template_id: int):
+    database.template_delete(template_id)
+    return JSONResponse(content={"success": True})
+
+@app.post("/api/templates/render")
+async def template_render(body: dict = Body(...)):
+    """Jinja2 渲染模板预览"""
+    from jinja2 import Template
+    tmpl = Template(body["template_text"])
+    try:
+        rendered = tmpl.render(**(body.get("variables", {})))
+        return JSONResponse(content={"rendered": rendered})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ══════ 配置备份 API ══════

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}端口管理 — H3C Monitor{% endblock %}
+{% block breadcrumb %}端口管理{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+            <div class="form-group mb-0" style="min-width:240px">
+                <label class="form-label">选择设备</label>
+                <select class="form-select" id="deviceSelect" onchange="onDeviceChange()">
+                    <option value="">请选择设备</option>
+                </select>
+            </div>
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" class="form-control" id="ifSearch" placeholder="搜索接口..."
+                       oninput="renderIfTable()" style="padding-left:32px">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card" id="ifCard" style="display:none">
+    <div class="card-header">接口列表</div>
+    <div class="card-body" style="padding:0">
+        <table class="table">
+            <thead><tr>
+                <th>接口</th><th>状态</th><th>描述</th><th>入/出字节</th><th>操作</th>
+            </tr></thead>
+            <tbody id="ifTable">
+                <tr class="table-empty"><td colspan="5">请选择设备</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 描述编辑弹窗 -->
+<div class="modal" id="descModal">
+    <div class="card" style="min-width:400px">
+        <div class="card-header flex-between">
+            <span>修改描述 — <strong id="descIfName"></strong></span>
+            <button class="btn btn-sm btn-outline" onclick="closeDescForm()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <form id="descForm">
+                <input type="hidden" id="descIfHidden">
+                <div class="form-group">
+                    <input type="text" class="form-control" id="descInput" placeholder="接口描述...">
+                </div>
+                <div class="flex-between mt-2">
+                    <button type="button" class="btn btn-outline" onclick="closeDescForm()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- VLAN 弹窗 -->
+<div class="modal" id="vlanModal">
+    <div class="card" style="min-width:400px">
+        <div class="card-header flex-between">
+            <span>VLAN 配置 — <strong id="vlanIfName"></strong></span>
+            <button class="btn btn-sm btn-outline" onclick="closeVlanForm()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <form id="vlanForm">
+                <input type="hidden" id="vlanIfHidden">
+                <div class="form-group">
+                    <label class="form-label">模式</label>
+                    <select class="form-select" id="vlanMode" onchange="toggleVlanMode()">
+                        <option value="access">Access</option>
+                        <option value="trunk">Trunk</option>
+                    </select>
+                </div>
+                <div class="form-group" id="vlanAccessGroup">
+                    <label class="form-label">VLAN ID</label>
+                    <input type="number" class="form-control" id="vlanAccessId" value="1" min="1" max="4094">
+                </div>
+                <div id="vlanTrunkGroup" style="display:none">
+                    <div class="form-group">
+                        <label class="form-label">PVID</label>
+                        <input type="number" class="form-control" id="vlanPvid" value="1" min="1" max="4094">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">允许 VLAN</label>
+                        <input type="text" class="form-control" id="vlanList" placeholder="如 1-10,20,30 或 all">
+                    </div>
+                </div>
+                <div class="flex-between mt-2">
+                    <button type="button" class="btn btn-outline" onclick="closeVlanForm()">取消</button>
+                    <button type="submit" class="btn btn-primary">下发</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/interfaces.js"></script>
+{% endblock %}
