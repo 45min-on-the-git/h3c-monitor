@@ -12,9 +12,8 @@ H3C Monitor — 网络设备监控系统。FastAPI + SQLite + APScheduler + Jinj
 uv sync                          # 安装依赖
 uv run python app.py             # 启动服务 (localhost:9001)
 uv run uvicorn app:app --host 0.0.0.0 --port 9001 --reload  # 开发模式
+uv run pytest tests/ -v          # 运行 18 个单元测试
 ```
-
-没有 lint、format、test 等配置。
 
 ## 架构
 
