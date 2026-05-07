@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}告警中心 — H3C Monitor{% endblock %}
+{% block breadcrumb %}告警中心{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-2">
+            <select class="form-select" id="alarmStatusFilter" onchange="loadAlarms()" style="width:auto">
+                <option value="">全部状态</option>
+                <option value="active">活跃</option>
+                <option value="acknowledged">已确认</option>
+                <option value="resolved">已解决</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding:0">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>设备</th>
+                    <th>指标</th>
+                    <th>当前值</th>
+                    <th>阈值</th>
+                    <th>触发时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="alarmsTable">
+                <tr class="table-empty"><td colspan="7">暂无告警</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/alarms.js"></script>
+{% endblock %}

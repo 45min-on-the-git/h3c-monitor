@@ -14,7 +14,9 @@ DEVICE_LIST = [
         "username": "admin",
         "password": "Admin@123456",
         "device_name": "FW-01",
-        "device_category": "firewall"
+        "device_category": "firewall",
+        "snmp_community": "public",
+        "snmp_version": 2,
     },
     {
         "device_type": "hp_comware",
@@ -22,7 +24,9 @@ DEVICE_LIST = [
         "username": "admin",
         "password": "Admin@123456",
         "device_name": "FW-02",
-        "device_category": "firewall"
+        "device_category": "firewall",
+        "snmp_community": "public",
+        "snmp_version": 2,
     },
     {
         "device_type": "hp_comware",
@@ -30,7 +34,9 @@ DEVICE_LIST = [
         "username": "admin",
         "password": "Admin@123456",
         "device_name": "SW-01",
-        "device_category": "switch"
+        "device_category": "switch",
+        "snmp_community": "public",
+        "snmp_version": 2,
     },
     {
         "device_type": "hp_comware",
@@ -38,6 +44,8 @@ DEVICE_LIST = [
         "username": "admin",
         "password": "Admin@123456",
         "device_name": "SW-02",
-        "device_category": "switch"
+        "device_category": "switch",
+        "snmp_community": "public",
+        "snmp_version": 2,
     }
 ]

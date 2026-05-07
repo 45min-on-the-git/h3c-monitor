@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}ACL 管理 — H3C Monitor{% endblock %}
+{% block breadcrumb %}ACL 管理{% endblock %}
+
+{% block content %}
+
+<!-- 设备选择器 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+            <div class="form-group mb-0" style="min-width:240px">
+                <label class="form-label">选择设备</label>
+                <select class="form-select" id="deviceSelect" onchange="onDeviceChange()">
+                    <option value="">请选择设备</option>
+                </select>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="showNewAclForm()" id="btnNewAcl" disabled>
+                    <i class="bi bi-plus-lg"></i> 新建 ACL
+                </button>
+                <button class="btn btn-outline" onclick="refreshAcl()" id="btnRefresh" disabled>
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ACL 列表 -->
+<div class="card" id="aclListCard" style="display:none">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-shield-check"></i> ACL 规则列表</span>
+        <span class="text-muted" style="font-size:12px" id="aclCount">0 条规则</span>
+    </div>
+    <div class="card-body" style="padding:0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ACL 编号</th>
+                        <th>规则 ID</th>
+                        <th>动作</th>
+                        <th>协议</th>
+                        <th>源</th>
+                        <th>目的</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="aclTable">
+                    <tr class="table-empty"><td colspan="7">请选择设备查看 ACL</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 新建 ACL 弹窗 -->
+<div class="modal" id="aclFormModal">
+    <div class="card" style="min-width:520px;max-width:600px">
+        <div class="card-header flex-between">
+            <span id="aclFormTitle">新建 ACL 规则</span>
+            <button class="btn btn-sm btn-outline" onclick="closeAclForm()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <form id="aclForm">
+                <input type="hidden" id="aclFormId">
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">ACL 编号</label>
+                        <input type="number" class="form-control" id="aclNumber" placeholder="3000-3999" min="3000" max="3999" required>
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">规则 ID</label>
+                        <input type="number" class="form-control" id="aclRuleId" placeholder="5/10/15..." min="0" step="5" required>
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">动作</label>
+                        <select class="form-select" id="aclAction">
+                            <option value="permit">permit (允许)</option>
+                            <option value="deny">deny (拒绝)</option>
+                        </select>
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">协议</label>
+                        <select class="form-select" id="aclProtocol">
+                            <option value="ip">ip (任意)</option>
+                            <option value="tcp">tcp</option>
+                            <option value="udp">udp</option>
+                            <option value="icmp">icmp</option>
+                        </select>
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">源地址</label>
+                        <input type="text" class="form-control" id="aclSrc" placeholder="any 或 192.168.1.0 0.0.0.255">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">目的地址</label>
+                        <input type="text" class="form-control" id="aclDst" placeholder="any 或 10.0.0.0 0.0.0.255">
+                    </div></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">说明</label>
+                    <input type="text" class="form-control" id="aclDesc" placeholder="可选描述">
+                </div>
+                <div class="flex-between mt-2">
+                    <div></div>
+                    <div class="flex gap-2">
+                        <button type="button" class="btn btn-outline" onclick="closeAclForm()">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/acl.js"></script>
+{% endblock %}

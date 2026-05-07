@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}监控总览 — H3C Monitor{% endblock %}
+{% block breadcrumb %}监控总览{% endblock %}
+
+{% block content %}
+
+<!-- 设备选择 + 时间范围 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+            <div class="form-group mb-0" style="min-width:240px">
+                <label class="form-label">选择设备</label>
+                <select class="form-select" id="deviceSelect" onchange="onDeviceChanged()">
+                    <option value="">全部设备</option>
+                </select>
+            </div>
+            <div class="form-group mb-0" style="min-width:180px">
+                <label class="form-label">开始时间</label>
+                <input type="datetime-local" class="form-control" id="startTime" onchange="onTimeRangeChanged()">
+            </div>
+            <div class="form-group mb-0" style="min-width:180px">
+                <label class="form-label">结束时间</label>
+                <input type="datetime-local" class="form-control" id="endTime" onchange="onTimeRangeChanged()">
+            </div>
+            <div style="min-width:120px">
+                <button class="btn btn-outline" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 设备卡片 -->
+<div class="row mb-3" id="devicesContainer">
+    <div class="col-12 text-center text-muted" style="padding:40px">加载中...</div>
+</div>
+
+<!-- 指标趋势图 -->
+<div class="card mb-3">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-graph-up"></i> 指标趋势</span>
+        <div class="flex gap-2">
+            <label class="form-label mb-0 flex" style="align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="showCpu" checked onchange="renderChart()"> CPU
+            </label>
+            <label class="form-label mb-0 flex" style="align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="showMem" checked onchange="renderChart()"> 内存
+            </label>
+            <label class="form-label mb-0 flex" style="align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="showTemp" checked onchange="renderChart()"> 温度
+            </label>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="chartPlaceholder" class="text-center text-muted" style="padding:60px 0">
+            请选择单个设备查看历史趋势
+        </div>
+        <canvas id="metricsChart" style="display:none;max-height:340px"></canvas>
+    </div>
+</div>
+
+<!-- 接口状态 -->
+<div class="card mb-3">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-diagram-3"></i> 接口状态</span>
+        <div class="flex gap-2">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" class="form-control" id="interfaceSearch" placeholder="搜索接口名称..." oninput="renderInterfaces()" style="padding-left:32px">
+            </div>
+            <select class="form-select" id="interfaceStatusFilter" onchange="renderInterfaces()" style="width:auto">
+                <option value="">全部状态</option>
+                <option value="UP">UP</option>
+                <option value="DOWN">DOWN</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body" style="padding:0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>接口名称</th>
+                        <th>设备</th>
+                        <th>状态</th>
+                        <th>入速率</th>
+                        <th>出速率</th>
+                        <th>利用率</th>
+                    </tr>
+                </thead>
+                <tbody id="interfacesTable">
+                    <tr class="table-empty"><td colspan="6">暂无接口数据</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 接口流量图（点击接口行展开） -->
+<div class="card mb-3" id="trafficChartCard" style="display:none">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-graph-up-arrow"></i> 接口流量: <strong id="trafficIfName">-</strong></span>
+        <button class="btn btn-sm btn-outline" onclick="hideTrafficChart()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <canvas id="trafficChart" style="max-height:300px"></canvas>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

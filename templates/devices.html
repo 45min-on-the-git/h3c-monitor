@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}设备台账 — H3C Monitor{% endblock %}
+{% block breadcrumb %}设备台账{% endblock %}
+
+{% block content %}
+
+<!-- 工具栏 -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+            <div class="flex gap-2" style="flex-wrap:wrap">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control" id="deviceSearch" placeholder="搜索设备名称/IP..."
+                           oninput="renderDeviceList()" style="padding-left:32px">
+                </div>
+                <select class="form-select" id="categoryFilter" onchange="renderDeviceList()" style="width:auto">
+                    <option value="">全部类型</option>
+                    <option value="firewall">防火墙</option>
+                    <option value="switch">交换机</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="showDeviceForm()">
+                <i class="bi bi-plus-lg"></i> 添加设备
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 设备列表 -->
+<div class="card">
+    <div class="card-body" style="padding:0">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>设备名称</th>
+                        <th>IP 地址</th>
+                        <th>类型</th>
+                        <th>型号</th>
+                        <th>序列号</th>
+                        <th>所属机房</th>
+                        <th>维保到期</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="devicesTable">
+                    <tr class="table-empty"><td colspan="8">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 设备编辑弹窗（hidden by default） -->
+<div class="modal" id="deviceModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;
+    background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+    <div class="card" style="min-width:560px;max-width:640px;max-height:85vh;overflow-y:auto">
+        <div class="card-header flex-between">
+            <span id="deviceModalTitle">编辑设备</span>
+            <button class="btn btn-sm btn-outline" onclick="closeDeviceForm()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <form id="deviceForm">
+                <input type="hidden" id="deviceFormId">
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">设备名称</label>
+                        <input type="text" class="form-control" id="deviceFormName">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">IP 地址</label>
+                        <input type="text" class="form-control" id="deviceFormIp">
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">设备类型</label>
+                        <select class="form-select" id="deviceFormCategory">
+                            <option value="switch">交换机</option>
+                            <option value="firewall">防火墙</option>
+                        </select>
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">型号</label>
+                        <input type="text" class="form-control" id="deviceFormModel">
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">序列号</label>
+                        <input type="text" class="form-control" id="deviceFormSn">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">资产编号</label>
+                        <input type="text" class="form-control" id="deviceFormAssetNo">
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">所属机房</label>
+                        <input type="text" class="form-control" id="deviceFormLocation">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">机柜</label>
+                        <input type="text" class="form-control" id="deviceFormRack">
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">采购日期</label>
+                        <input type="date" class="form-control" id="deviceFormPurchaseDate">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">维保到期</label>
+                        <input type="date" class="form-control" id="deviceFormWarranty">
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">供应商</label>
+                        <input type="text" class="form-control" id="deviceFormSupplier">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">合同编号</label>
+                        <input type="text" class="form-control" id="deviceFormContract">
+                    </div></div>
+                </div>
+                <div class="flex-between mt-2">
+                    <div></div>
+                    <div class="flex gap-2">
+                        <button type="button" class="btn btn-outline" onclick="closeDeviceForm()">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal { display: none; }
+.modal.open { display: flex; }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/devices.js"></script>
+{% endblock %}

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-H3C Monitor — 通过 SSH 采集 H3C 交换机和防火墙指标的网络设备监控系统。FastAPI + SQLite + Netmiko + APScheduler + Jinja2。
+H3C Monitor — 网络设备监控系统。FastAPI + SQLite + APScheduler + Jinja2，支持 SNMP/SSH 双通道采集，侧边栏多页面架构。
 
 ## 常用命令
 
@@ -14,43 +14,63 @@ uv run python app.py             # 启动服务 (localhost:9001)
 uv run uvicorn app:app --host 0.0.0.0 --port 9001 --reload  # 开发模式
 ```
 
-没有 lint、format、test 等配置 — 项目目前无测试框架。
+没有 lint、format、test 等配置。
 
 ## 架构
 
 ```
-app.py          - FastAPI 应用、路由、APScheduler 自动采集调度
-collector.py    - Netmiko SSH 采集 + 正则解析 H3C CLI 输出
-database.py     - SQLite CRUD（devices / device_metrics / interface_stats）
-config.py       - DEVICE_LIST、DB_PATH、COLLECT_INTERVAL
-templates/      - Jinja2 HTML（Bootstrap 5 + Chart.js，全部走 CDN，无本地 static）
+app.py              - FastAPI 应用、页面路由、API 路由、APScheduler 调度
+collector.py        - 采集器：SNMP 优先，SSH 兜底
+alarm.py            - 告警引擎：规则管理 + 告警检查 + 自动触发/恢复
+driver/             - 设备驱动
+  base.py           - DeviceDriver 抽象基类 + DeviceInfo/MetricsResult/InterfaceData
+  h3c_snmp.py       - H3C SNMPv2c 驱动 (pysnmp 7.x)
+  h3c_ssh.py        - H3C SSH 驱动 (Netmiko)
+  __init__.py        - get_driver() / get_ssh_driver()
+database.py         - SQLite CRUD (devices/device_metrics/interface_stats/alarms/alarm_rules)
+config.py           - DEVICE_LIST (含 SNMP 配置)、DB_PATH、COLLECT_INTERVAL
+templates/          - Jinja2 模板 (base.html 布局 + 各页面继承)
+static/             - CSS/JS (暗色主题、API 封装)
 ```
 
 ## 关键设计
 
+### 采集 + 告警联动
+
+`auto_collect()` → `collector` 采集 → `_save_and_alarm()` 写库 → `alarm.check_and_trigger()` 逐规则检查：
+- 指标超阈值 → 写 `alarms` (status=active)
+- 指标恢复 → 自动 `resolved`
+- 同一规则不重复触发 (已有 active 则跳过)
+
 ### APScheduler 线程模型
 
-`app.py` 使用 `BlockingScheduler`（设计上是阻塞的），但将它放入 daemon 线程启动。这意味着调度器在后台运行，主线程继续执行 uvicorn。daemon=True 保证进程退出时调度器随之终止。
+`BlockingScheduler` 放入 daemon 线程启动，调度器在后台运行，主线程执行 uvicorn。
 
-### 采集流程
+### 前端：base.html 模板继承
 
-1. `collector.collect_device_data(device_config)` 通过 Netmiko (`hp_comware`) SSH 连接设备
-2. 依次执行 H3C CLI 命令：`display version`、`display cpu-usage`、`display memory`、`display environment`、`display interface brief`、`display interface`、`display session statistics ipv4`（仅防火墙）、`display ip interface brief`
-3. 每个命令的输出由对应的正则解析函数提取指标值
-4. 结果通过 `database.get_or_create_device()` 写入/更新设备记录，指标和接口数据追加写入
+所有页面继承 `templates/base.html`：侧边栏导航 + 顶栏（时钟、告警指示灯、主题切换）。静态文件：`static/css/app.css`（明/暗双主题）、`static/js/api.js`（fetch 封装 + 通用工具）。
 
-### 接口采集的双路径
+### 已实现页面
 
-`collect_device_data()` 同时采集 `display interface brief`（快速获取接口名+状态）和 `display interface`（获取详细流量字节数）。两者结果通过 `extend` 合并，但接口命名规范不同（brief 用缩写如 `GE1/0`，detail 用全名如 `GigabitEthernet1/0/1`），可能产生同一物理接口的多条记录。
+| 路由 | 模板 | 功能 |
+|------|------|------|
+| `/` | dashboard.html | 监控总览（设备卡片、指标图表、接口表格） |
+| `/devices` | devices.html | 设备台账（列表、筛选、编辑弹窗） |
+| `/alarms` | alarms.html | 告警中心（列表、确认） |
+| `/acl` | acl.html | ACL 管理（规则列表、新建/编辑/删除，通过 SSH 下发） |
 
-### get_latest_interfaces 子查询
+### SNMP OID
 
-`database.get_latest_interfaces()` 使用关联子查询，按 `(device_id, if_name)` 分组取每个接口最新一条记录，而非简单按时间取全部。
+H3C 私有 MIB：CPU `1.3.6.1.4.1.25506.2.6.1.1.1.1.6`、内存 `...1.8`、温度 `...1.12`。
+标准 MIB：sysDescr/sysName/sysUpTime、IF-MIB (ifHCInOctets/ifHCOutOctets/ifHighSpeed)。
 
-### 启动即采集
+### 数据库表
 
-`app.py` 模块加载时（第 60 行）会同步执行一次 `auto_collect()`。在调度器启动前完成首次采集，确保 Web UI 立即可见数据。
+- `devices` — 设备信息 + 台账扩展字段 (serial_number, warranty_expiry, location, rack, tags 等)
+- `device_metrics` — CPU/内存/温度/会话/运行时间
+- `interface_stats` — 接口状态/流量
+- `alarms` / `alarm_rules` — 告警规则与记录（已实现）
 
 ## 已知问题
 
-- **接口采集的双路径**：`collect_device_data()` 同时采集 `display interface brief`（快速获取接口名+状态）和 `display interface`（获取详细流量字节数）。两者结果通过 `extend` 合并，但接口命名规范不同（brief 用缩写如 `GE1/0`，detail 用全名如 `GigabitEthernet1/0/1`），可能产生同一物理接口的多条记录。
+- **接口采集双路径**（SSH 驱动）：`display interface brief` 和 `display interface` 合并，命名规范不同可能产生重复。SNMP 驱动无此问题。
