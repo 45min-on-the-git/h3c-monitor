@@ -278,8 +278,15 @@ class H3CSSHDriver(DeviceDriver):
                 if m:
                     rule_id = int(m.group(1))
                     action = m.group(2).lower()
-                    protocol = (m.group(3) or "ip").lower()
+                    raw_proto = (m.group(3) or "").lower()
                     rest = m.group(4) or ""
+                    # 处理 Basic ACL 格式: rule 5 permit source 1.1.1.1 0
+                    # source 不是协议名，而是源地址关键字
+                    if raw_proto == "source":
+                        protocol = "ip"
+                        rest = f" source{rest}"
+                    else:
+                        protocol = raw_proto or "ip"
                     source = "any"
                     destination = "any"
                     src_m = re.search(r"source\s+(\S+(?:\s+\S+)?)", rest)

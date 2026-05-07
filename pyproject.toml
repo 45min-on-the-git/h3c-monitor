@@ -18,3 +18,8 @@ h3c-monitor = "app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app.py", "collector.py", "database.py", "config.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
