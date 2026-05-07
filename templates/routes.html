@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}静态路由 — H3C Monitor{% endblock %}
+{% block breadcrumb %}静态路由{% endblock %}
+{% block content %}
+<div class="card mb-3"><div class="card-body">
+    <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+        <div class="form-group mb-0" style="min-width:240px">
+            <label class="form-label">选择设备</label><select class="form-select" id="devSel" onchange="loadRoutes()"><option value="">请选择</option></select>
+        </div>
+        <button class="btn btn-primary" id="btnAdd" disabled onclick="showForm()"><i class="bi bi-plus-lg"></i> 添加路由</button>
+    </div>
+</div></div>
+<div class="card" id="card" style="display:none"><div class="card-body" style="padding:0">
+    <table class="table"><thead><tr><th>目的网段</th><th>掩码</th><th>下一跳</th><th>优先级</th><th>操作</th></tr></thead>
+        <tbody id="routeTable"><tr class="table-empty"><td colspan="5">请选择设备</td></tr></tbody>
+    </table>
+</div></div>
+<div class="modal" id="formModal"><div class="card" style="min-width:420px">
+    <div class="card-header flex-between"><span>添加静态路由</span><button class="btn btn-sm btn-outline" onclick="closeForm()"><i class="bi bi-x-lg"></i></button></div>
+    <div class="card-body"><form id="routeForm">
+        <div class="row"><div class="col-6"><div class="form-group"><label class="form-label">目的网段</label><input type="text" class="form-control" id="dest" placeholder="192.168.1.0" required></div></div>
+        <div class="col-6"><div class="form-group"><label class="form-label">掩码</label><input type="text" class="form-control" id="mask" placeholder="255.255.255.0" required></div></div></div>
+        <div class="row"><div class="col-6"><div class="form-group"><label class="form-label">下一跳</label><input type="text" class="form-control" id="nexthop" placeholder="192.168.1.1" required></div></div>
+        <div class="col-6"><div class="form-group"><label class="form-label">优先级</label><input type="number" class="form-control" id="pref" value="60"></div></div></div>
+        <div class="flex-between mt-2"><button type="button" class="btn btn-outline" onclick="closeForm()">取消</button><button type="submit" class="btn btn-primary">保存</button></div>
+    </form></div>
+</div></div>
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+{% endblock %}
+{% block scripts %}<script src="/static/js/routes.js"></script>{% endblock %}

@@ -123,6 +123,18 @@ async def page_audit(request: Request):
 async def page_vlan_registry(request: Request):
     return templates.TemplateResponse(request, "vlan_registry.html")
 
+@app.get("/routes", response_class=HTMLResponse)
+async def page_routes(request: Request):
+    return templates.TemplateResponse(request, "routes.html")
+
+@app.get("/bigscreen", response_class=HTMLResponse)
+async def page_bigscreen(request: Request):
+    return templates.TemplateResponse(request, "bigscreen.html")
+
+@app.get("/reports", response_class=HTMLResponse)
+async def page_reports(request: Request):
+    return templates.TemplateResponse(request, "reports.html")
+
 
 # ══════ 设备 API ══════
 
@@ -730,6 +742,108 @@ async def config_preview(device_id: int, body: dict = Body(...)):
         return JSONResponse(content={"rendered": rendered})
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ══════ 静态路由 API ══════
+
+@app.get("/api/routes/{device_id}")
+async def route_list(device_id: int):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        routes = driver.route_list_static()
+        driver.disconnect()
+        return JSONResponse(content=routes)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/routes/{device_id}")
+async def route_add(device_id: int, body: dict = Body(...)):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        driver.route_add_static(
+            body["destination"], body["mask"], body["next_hop"],
+            body.get("preference", 60),
+        )
+        driver.disconnect()
+        database.audit_log("route_add", device_id, f"{body['destination']}/{body['mask']} → {body['next_hop']}")
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/routes/{device_id}")
+async def route_delete(device_id: int, body: dict = Body(...)):
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        driver.route_delete_static(body["destination"], body["mask"], body["next_hop"])
+        driver.disconnect()
+        database.audit_log("route_delete", device_id, f"{body['destination']}/{body['mask']}")
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════ 大屏 API ══════
+
+@app.get("/api/bigscreen/summary")
+async def bigscreen_summary():
+    """大屏总览数据"""
+    devices = database.get_devices()
+    active_alarms = alarm.get_alarms(status="active")
+    metrics_list = []
+    for d in devices:
+        m = database.get_latest_metrics(d["id"])
+        if m:
+            m["device_name"] = d.get("hostname") or d.get("ip") or ""
+            m["device_type"] = d.get("device_type") or ""
+            m["status"] = d.get("status", "online")
+            metrics_list.append(m)
+    return JSONResponse(content={
+        "devices": devices,
+        "device_count": len(devices),
+        "online_count": len([d for d in devices if d.get("status") == "online"]),
+        "alarm_count": len(active_alarms),
+        "metrics": metrics_list,
+    })
+
+
+# ══════ 报表 API ══════
+
+from datetime import datetime as dt, timedelta
+
+@app.get("/api/reports/aggregate")
+async def report_aggregate(device_id: int, days: int = 7):
+    """聚合指标报表（avg/max/min）"""
+    end = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+    start = (dt.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    metrics = database.get_metrics(device_id=device_id, start_time=start, end_time=end)
+
+    if not metrics:
+        return JSONResponse(content={"cpu_avg": 0, "cpu_max": 0, "mem_avg": 0, "mem_max": 0, "count": 0})
+
+    cpus = [m["cpu_usage"] for m in metrics if m.get("cpu_usage") is not None]
+    mems = [m["mem_usage"] for m in metrics if m.get("mem_usage") is not None]
+    temps = [m["temperature"] for m in metrics if m.get("temperature") is not None]
+
+    return JSONResponse(content={
+        "cpu_avg": round(sum(cpus)/len(cpus), 1) if cpus else 0,
+        "cpu_max": round(max(cpus), 1) if cpus else 0,
+        "mem_avg": round(sum(mems)/len(mems), 1) if mems else 0,
+        "mem_max": round(max(mems), 1) if mems else 0,
+        "temp_avg": round(sum(temps)/len(temps), 1) if temps else 0,
+        "count": len(metrics),
+        "period_days": days,
+        "period_start": start,
+        "period_end": end,
+    })
 
 
 # ══════ 配置回滚 API ══════

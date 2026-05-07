@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}定时报表 — H3C Monitor{% endblock %}
+{% block breadcrumb %}定时报表{% endblock %}
+{% block content %}
+<div class="card mb-3"><div class="card-body">
+    <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+        <div class="form-group mb-0" style="min-width:240px"><label class="form-label">选择设备</label><select class="form-select" id="devSel" onchange="loadReport()"><option value="">请选择</option></select></div>
+        <div class="form-group mb-0"><label class="form-label">时间范围</label><select class="form-select" id="daysSel" onchange="loadReport()"><option value="1">最近 1 天</option><option value="7" selected>最近 7 天</option><option value="30">最近 30 天</option></select></div>
+    </div>
+</div></div>
+<div class="row" id="reportRow" style="display:none">
+    <div class="col-md-4"><div class="card"><div class="card-header">CPU 使用率</div><div class="card-body">
+        <div class="flex-between mb-2"><span class="form-label">平均值</span><strong style="font-size:24px" id="cpu_avg">-</strong></div>
+        <div class="flex-between"><span class="form-label">最大值</span><strong style="font-size:24px" id="cpu_max">-</strong></div>
+    </div></div></div>
+    <div class="col-md-4"><div class="card"><div class="card-header">内存使用率</div><div class="card-body">
+        <div class="flex-between mb-2"><span class="form-label">平均值</span><strong style="font-size:24px" id="mem_avg">-</strong></div>
+        <div class="flex-between"><span class="form-label">最大值</span><strong style="font-size:24px" id="mem_max">-</strong></div>
+    </div></div></div>
+    <div class="col-md-4"><div class="card"><div class="card-header"><i class="bi bi-thermometer-half"></i> 温度</div><div class="card-body">
+        <div class="flex-between mb-2"><span class="form-label">平均值</span><strong style="font-size:24px" id="temp_avg">-</strong></div>
+        <p class="text-muted mb-0" style="font-size:12px" id="reportInfo"></p>
+    </div></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let _devs=[];
+document.addEventListener('DOMContentLoaded',async()=>{
+    _devs=await API.get('/api/devices')||[];
+    const s=document.getElementById('devSel');_devs.forEach(d=>s.innerHTML+=`<option value="${d.id}">${Util.escapeHtml(d.device_name||d.hostname||d.ip)}</option>`);
+});
+async function loadReport(){
+    const did=document.getElementById('devSel').value,days=document.getElementById('daysSel').value;
+    if(!did){document.getElementById('reportRow').style.display='none';return}
+    const r=await API.get(`/api/reports/aggregate?device_id=${did}&days=${days}`);
+    document.getElementById('reportRow').style.display='';
+    document.getElementById('cpu_avg').textContent=r.cpu_avg+'%';
+    document.getElementById('cpu_max').textContent=r.cpu_max+'%';
+    document.getElementById('mem_avg').textContent=r.mem_avg+'%';
+    document.getElementById('mem_max').textContent=r.mem_max+'%';
+    document.getElementById('temp_avg').textContent=r.temp_avg+'°C';
+    document.getElementById('reportInfo').textContent=`${r.count} 个数据点 · ${r.period_days}天`;
+}
+</script>
+{% endblock %}

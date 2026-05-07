@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NOC 大屏 — H3C Monitor</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e17;color:#c0c8d8;font-family:'SF Mono','Consolas',monospace;overflow:hidden;height:100vh}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:#111620;border-bottom:1px solid #1e2532}
+.header h1{font-size:18px;color:#5c9ce6}.header .time{font-size:13px;color:#555}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr;gap:12px;padding:12px;height:calc(100vh - 54px)}
+.stats{grid-column:1/-1;display:flex;gap:16px}
+.stat{flex:1;background:#111620;border-radius:8px;padding:16px;text-align:center;border:1px solid #1e2532}
+.stat .val{font-size:36px;font-weight:700;margin-bottom:4px}
+.stat .lbl{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px}
+.panel{background:#111620;border-radius:8px;border:1px solid #1e2532;overflow:hidden;display:flex;flex-direction:column}
+.panel-title{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#555;padding:12px 16px;border-bottom:1px solid #1e2532}
+.panel-body{flex:1;overflow-y:auto;padding:8px}
+.device-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #1a1e28;font-size:13px}
+.device-row:last-child{border-bottom:0}
+.gauge{display:flex;align-items:center;gap:8px}
+.gauge-bar{width:80px;height:6px;background:#1e2532;border-radius:3px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width 0.5s}
+.alarm-item{padding:8px 12px;border-bottom:1px solid #1a1e28;font-size:12px;display:flex;justify-content:space-between}
+.alarm-item .time{color:#555}
+@keyframes blink{50%{opacity:0.3}}.blink{animation:blink 1s infinite}
+</style>
+</head>
+<body>
+<div class="header"><h1><i class="bi bi-hdd-network"></i> H3C NOC Monitor</h1><div class="time" id="clock"></div></div>
+<div class="grid">
+    <div class="stats" id="stats"></div>
+    <div class="panel"><div class="panel-title">设备 CPU 负载</div><div class="panel-body" id="cpuPanel"></div></div>
+    <div class="panel"><div class="panel-title">设备内存使用</div><div class="panel-body" id="memPanel"></div></div>
+    <div class="panel"><div class="panel-title">活跃告警</div><div class="panel-body" id="alarmPanel"></div></div>
+</div>
+<script>
+function color(v){return v>80?'#ff6b6b':v>50?'#ffd43b':'#51cf66'}
+async function refresh(){
+    const d=await fetch('/api/bigscreen/summary').then(r=>r.json());
+    document.getElementById('stats').innerHTML=`
+        <div class="stat"><div class="val" style="color:#5c9ce6">${d.device_count}</div><div class="lbl">总设备</div></div>
+        <div class="stat"><div class="val" style="color:#51cf66">${d.online_count}</div><div class="lbl">在线</div></div>
+        <div class="stat"><div class="val" style="color:${d.alarm_count?'#ff6b6b':'#51cf66'}">${d.alarm_count}</div><div class="lbl">${d.alarm_count?'活跃告警':'系统正常'}</div></div>`;
+    document.getElementById('cpuPanel').innerHTML=(d.metrics||[]).map(m=>`<div class="device-row"><span>${m.device_name||'-'} (${m.device_type||''})</span><div class="gauge"><div class="gauge-bar"><div class="gauge-fill" style="width:${m.cpu_usage||0}%;background:${color(m.cpu_usage||0)}"></div></div><span style="font-size:12px">${(m.cpu_usage||0).toFixed(1)}%</span></div></div>`).join('');
+    document.getElementById('memPanel').innerHTML=(d.metrics||[]).map(m=>`<div class="device-row"><span>${m.device_name||'-'} (${m.device_type||''})</span><div class="gauge"><div class="gauge-bar"><div class="gauge-fill" style="width:${m.mem_usage||0}%;background:${color(m.mem_usage||0)}"></div></div><span style="font-size:12px">${(m.mem_usage||0).toFixed(1)}%</span></div></div>`).join('');
+    document.getElementById('alarmPanel').innerHTML=d.alarm_count?`<div class="alarm-item blink"><span>${d.alarm_count} 条活跃告警</span><a href="/alarms" style="color:#5c9ce6">查看 &rarr;</a></div>`:'<div style="text-align:center;color:#333;padding:40px">无活跃告警</div>';
+    document.getElementById('clock').textContent=new Date().toLocaleString('zh-CN');
+}
+refresh();setInterval(refresh,10000);
+</script>
+</body>
+</html>

@@ -283,6 +283,43 @@ class H3CSSHDriver(DeviceDriver):
         ]
         return self.execute_commands(cmds)
 
+    # ── 静态路由 ──
+
+    def route_list_static(self) -> List[Dict]:
+        """获取静态路由列表"""
+        output = self.execute_command("display ip routing-table protocol static", read_timeout=30)
+        return self._parse_routes(output)
+
+    def route_add_static(self, destination: str, mask: str, next_hop: str, preference: int = 60) -> str:
+        """添加静态路由"""
+        return self.execute_commands([
+            f"ip route-static {destination} {mask} {next_hop} preference {preference}"
+        ])
+
+    def route_delete_static(self, destination: str, mask: str, next_hop: str) -> str:
+        """删除静态路由"""
+        return self.execute_commands([
+            f"undo ip route-static {destination} {mask} {next_hop}"
+        ])
+
+    def _parse_routes(self, output: str) -> List[Dict]:
+        """解析 display ip routing-table 输出"""
+        routes = []
+        for line in output.split("\n"):
+            line = line.strip()
+            m = re.match(
+                r"(\d+\.\d+\.\d+\.\d+)/(\d+)\s+Static\s+(\d+)\s+\d+\s+(\d+\.\d+\.\d+\.\d+)",
+                line,
+            )
+            if m:
+                routes.append({
+                    "destination": m.group(1),
+                    "mask": m.group(2),
+                    "preference": int(m.group(3)),
+                    "next_hop": m.group(4),
+                })
+        return routes
+
     def _parse_acls(self, output: str) -> List[Dict]:
         """解析 display acl all 输出"""
         rules = []
