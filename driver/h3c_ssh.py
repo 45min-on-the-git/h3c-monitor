@@ -291,6 +291,43 @@ class H3CSSHDriver(DeviceDriver):
         ]
         return self.execute_commands(cmds)
 
+    # ── VLAN 操作 ──
+
+    def vlan_list(self) -> List[Dict]:
+        """获取 VLAN 列表（SSH display vlan）"""
+        output = self.execute_command("display vlan", read_timeout=30)
+        vlans = []
+        current_vid = None
+        for line in output.split("\n"):
+            line = line.strip()
+            # 格式1: "VLAN ID: 100"
+            m = re.match(r"VLAN\s+ID:\s*(\d+)", line, re.IGNORECASE)
+            if m:
+                current_vid = int(m.group(1))
+                vlans.append({"vlan_id": current_vid, "name": "", "description": ""})
+                continue
+            # Name / Description
+            if current_vid is not None:
+                nm = re.match(r"Name:\s*(.+)", line, re.IGNORECASE)
+                if nm and vlans:
+                    vlans[-1]["name"] = nm.group(1).strip()
+                dm = re.match(r"Description:\s*(.+)", line, re.IGNORECASE)
+                if dm and vlans:
+                    vlans[-1]["description"] = dm.group(1).strip()
+        # 格式2: display vlan brief 表格
+        if not vlans:
+            for line in output.split("\n"):
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[0].isdigit():
+                    try:
+                        vid = int(parts[0])
+                        if 1 <= vid <= 4094:
+                            name = parts[1] if len(parts) > 1 and parts[1] not in ("active", "static", "dynamic") else ""
+                            vlans.append({"vlan_id": vid, "name": name, "description": ""})
+                    except ValueError:
+                        continue
+        return vlans
+
     # ── 静态路由 ──
 
     def route_list_static(self) -> List[Dict]:
