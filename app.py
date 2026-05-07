@@ -205,8 +205,8 @@ async def get_interface_traffic(
 async def port_shutdown(device_id: int, if_name: str):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.port_shutdown(if_name)
         driver.disconnect()
@@ -218,8 +218,8 @@ async def port_shutdown(device_id: int, if_name: str):
 async def port_undo_shutdown(device_id: int, if_name: str):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.port_undo_shutdown(if_name)
         driver.disconnect()
@@ -231,8 +231,8 @@ async def port_undo_shutdown(device_id: int, if_name: str):
 async def port_description(device_id: int, if_name: str, body: dict = Body(...)):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.port_set_description(if_name, body.get("description", ""))
         driver.disconnect()
@@ -240,12 +240,33 @@ async def port_description(device_id: int, if_name: str, body: dict = Body(...))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/interfaces/{device_id}/{if_name}/ip")
+async def port_ip(device_id: int, if_name: str, body: dict = Body(...)):
+    """设置三层接口 IP 地址"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
+        driver.connect()
+        if hasattr(driver, 'port_set_ip'):
+            driver.port_set_ip(if_name, body["ip"], body.get("mask", "255.255.255.0"))
+        else:
+            driver.execute_commands([
+                f"interface {if_name}",
+                f"ip address {body['ip']} {body.get('mask', '255.255.255.0')}",
+            ])
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/interfaces/{device_id}/{if_name}/vlan")
 async def port_vlan(device_id: int, if_name: str, body: dict = Body(...)):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         mode = body.get("mode", "access")
         if mode == "access":
@@ -378,8 +399,8 @@ async def get_device_acls(device_id: int):
 async def create_acl_rule(device_id: int, body: dict = Body(...)):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.create_acl_rule(
             acl_number=body["acl_number"],
@@ -400,8 +421,8 @@ async def create_acl_rule(device_id: int, body: dict = Body(...)):
 async def update_acl_rule(device_id: int, acl_number: int, rule_id: int, body: dict = Body(...)):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.delete_acl_rule(acl_number, rule_id)
         driver.create_acl_rule(
@@ -422,8 +443,8 @@ async def update_acl_rule(device_id: int, acl_number: int, rule_id: int, body: d
 async def delete_acl_rule(device_id: int, acl_number: int, rule_id: int):
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         driver.delete_acl_rule(acl_number, rule_id)
         driver.disconnect()
@@ -467,6 +488,60 @@ async def ipam_set_allocation(subnet_id: int, body: dict = Body(...)):
         body.get("description", ""),
     )
     return JSONResponse(content={"success": True})
+
+
+# ══════ VLAN API ══════
+
+@app.get("/api/vlans/{device_id}")
+async def vlan_list(device_id: int):
+    """获取设备 VLAN 列表"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
+        driver.connect()
+        vlans = driver.vlan_list() if hasattr(driver, 'vlan_list') else []
+        driver.disconnect()
+        return JSONResponse(content=vlans)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vlans/{device_id}")
+async def vlan_create(device_id: int, body: dict = Body(...)):
+    """创建设备 VLAN"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
+        driver.connect()
+        if hasattr(driver, 'vlan_create'):
+            driver.vlan_create(body["vlan_id"], body.get("name", ""), body.get("description", ""))
+        else:
+            driver.execute_commands([
+                f"vlan {body['vlan_id']}",
+                *([f"name {body['name']}"] if body.get("name") else []),
+            ])
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/vlans/{device_id}/{vlan_id}")
+async def vlan_delete(device_id: int, vlan_id: int):
+    """删除设备 VLAN"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
+        driver.connect()
+        if hasattr(driver, 'vlan_delete'):
+            driver.vlan_delete(vlan_id)
+        else:
+            driver.execute_commands([f"undo vlan {vlan_id}"])
+        driver.disconnect()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ══════ 配置模板 API ══════
@@ -530,8 +605,8 @@ async def config_backup_now(device_id: int):
     """立即备份设备配置"""
     device_config = _get_device_ssh_config(device_id)
     try:
-        from driver import get_ssh_driver
-        driver = get_ssh_driver(device_config)
+        from driver import get_config_driver
+        driver = get_config_driver(device_config)
         driver.connect()
         config_text = driver.execute_command("display current-configuration", read_timeout=60)
         driver.disconnect()

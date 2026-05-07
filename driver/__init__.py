@@ -6,11 +6,7 @@ from driver.h3c_snmp import H3CSNMPDriver
 
 
 def get_driver(device_config: dict, prefer_snmp: bool = True) -> DeviceDriver:
-    """
-    返回合适的驱动实例。
-    - prefer_snmp=True: 优先 SNMP，当前仅 H3C
-    - prefer_snmp=False: 返回 SSH 驱动
-    """
+    """采集驱动：SNMP 优先，SSH 兜底"""
     device_type = device_config.get("device_type", "hp_comware")
 
     if device_type == "hp_comware":
@@ -22,5 +18,24 @@ def get_driver(device_config: dict, prefer_snmp: bool = True) -> DeviceDriver:
 
 
 def get_ssh_driver(device_config: dict) -> H3CSSHDriver:
-    """获取 SSH 驱动（用于 fallback 和配置下发）"""
+    """获取 SSH 驱动（用于配置下发和 fallback）"""
     return H3CSSHDriver(device_config)
+
+
+def get_config_driver(device_config: dict) -> DeviceDriver:
+    """
+    配置下发驱动：NETCONF 优先，SSH 兜底。
+    先试 NETCONF 连接，失败自动退 SSH。
+    """
+    device_type = device_config.get("device_type", "hp_comware")
+    if device_type != "hp_comware":
+        return H3CSSHDriver(device_config)
+
+    try:
+        from driver.h3c_netconf import H3CNETCONFDriver
+        driver = H3CNETCONFDriver(device_config)
+        driver.connect()
+        driver.disconnect()  # 仅测试连通性
+        return H3CNETCONFDriver(device_config)
+    except Exception:
+        return H3CSSHDriver(device_config)
