@@ -223,10 +223,10 @@ class H3CSSHDriver(DeviceDriver):
     def create_acl_rule(self, acl_number: int, rule_id: int, action: str,
                         protocol: str = "ip", source: str = "any",
                         destination: str = "any", description: str = "") -> str:
-        """创建 ACL 规则（通过 SSH 下发）"""
-        cmds = []
-        # 如果 ACL 不存在，先创建
-        cmds.append(f"acl advanced {acl_number}")
+        """创建 ACL 规则（通过 SSH 下发，Comware V7 语法）"""
+        cmds = [
+            f"acl number {acl_number}",
+        ]
         src_clause = f" source {source}" if source and source != "any" else ""
         dst_clause = f" destination {destination}" if destination and destination != "any" else ""
         desc_clause = f" description {description}" if description else ""
@@ -238,7 +238,7 @@ class H3CSSHDriver(DeviceDriver):
     def delete_acl_rule(self, acl_number: int, rule_id: int) -> str:
         """删除 ACL 规则"""
         return self.execute_commands([
-            f"acl advanced {acl_number}",
+            f"acl number {acl_number}",
             f"undo rule {rule_id}",
         ])
 
@@ -256,26 +256,30 @@ class H3CSSHDriver(DeviceDriver):
         current_acl = None
         for line in output.split("\n"):
             line = line.strip()
-            # 匹配 ACL 头部：Advanced ACL 3000
-            m = re.match(r"Advanced\s+ACL\s+(\d+)", line, re.IGNORECASE)
+            # 匹配 ACL 头：Advanced IPv4 ACL 3000, named xxx, 3 rules,
+            # 或：Advanced ACL  3000,
+            # 或：Basic ACL  2000,
+            m = re.match(
+                r"(?:Advanced|Basic)\s+(?:IPv4\s+)?ACL\s+(\d+)\s*,", line, re.IGNORECASE
+            )
             if m:
                 current_acl = int(m.group(1))
                 continue
-            m = re.match(r"Basic\s+ACL\s+(\d+)", line, re.IGNORECASE)
-            if m:
-                current_acl = int(m.group(1))
+            # 跳过注释行
+            if " comment " in line:
                 continue
-            # 匹配规则：rule 5 permit tcp source 192.168.1.0 0.0.0.255 destination any
-            if current_acl:
+            # 匹配规则行：rule 5 permit ip source ... (5 times matched)
+            # 或：rule 0 permit (无协议 = ip)
+            if current_acl is not None:
                 m = re.match(
-                    r"rule\s+(\d+)\s+(permit|deny)\s+(\S+)(.*)",
+                    r"rule\s+(\d+)\s+(permit|deny)\s*(\S+)?(.*?)(?:\s*\(\d+\s+times\s+matched\))?$",
                     line, re.IGNORECASE,
                 )
                 if m:
                     rule_id = int(m.group(1))
                     action = m.group(2).lower()
-                    protocol = m.group(3).lower()
-                    rest = m.group(4)
+                    protocol = (m.group(3) or "ip").lower()
+                    rest = m.group(4) or ""
                     source = "any"
                     destination = "any"
                     src_m = re.search(r"source\s+(\S+(?:\s+\S+)?)", rest)

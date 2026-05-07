@@ -255,20 +255,27 @@ async def delete_alarm_rule(rule_id: int):
 
 # ══════ ACL API ══════
 
-@app.get("/api/acl/{device_id}")
-async def get_device_acls(device_id: int):
-    """通过 SSH 读取设备 ACL 规则"""
+def _get_device_ssh_config(device_id: int):
+    """Helper: 查找设备的 SSH 配置"""
     devices = database.get_devices()
     device_info = next((d for d in devices if d["id"] == device_id), None)
     if not device_info:
         raise HTTPException(status_code=404, detail="Device not found")
-
-    # 从 config 获取 SSH 凭据
     device_config = next(
         (d for d in config.DEVICE_LIST if d["ip"] == device_info["ip"]), None
     )
     if not device_config:
-        raise HTTPException(status_code=404, detail="Device config not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"设备 {device_info['ip']} 未在 config.py DEVICE_LIST 中配置 SSH 凭据"
+        )
+    return device_config
+
+
+@app.get("/api/acl/{device_id}")
+async def get_device_acls(device_id: int):
+    """通过 SSH 读取设备 ACL 规则"""
+    device_config = _get_device_ssh_config(device_id)
 
     try:
         from driver import get_ssh_driver
@@ -276,26 +283,17 @@ async def get_device_acls(device_id: int):
         driver.connect()
         acls = driver.get_acls()
         driver.disconnect()
-        return JSONResponse(content=acls)
+        return JSONResponse(content={"rules": acls, "success": True})
     except Exception as e:
-        # SSH 不可达时返回空列表（不给用户报错）
-        return JSONResponse(content=[])
+        raise HTTPException(
+            status_code=500,
+            detail=f"SSH 读取失败: {str(e)}"
+        )
 
 
 @app.post("/api/acl/{device_id}")
 async def create_acl_rule(device_id: int, body: dict = Body(...)):
-    """创建 ACL 规则并下发到设备"""
-    devices = database.get_devices()
-    device_info = next((d for d in devices if d["id"] == device_id), None)
-    if not device_info:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    device_config = next(
-        (d for d in config.DEVICE_LIST if d["ip"] == device_info["ip"]), None
-    )
-    if not device_config:
-        raise HTTPException(status_code=404, detail="Device config not found")
-
+    device_config = _get_device_ssh_config(device_id)
     try:
         from driver import get_ssh_driver
         driver = get_ssh_driver(device_config)
@@ -317,18 +315,7 @@ async def create_acl_rule(device_id: int, body: dict = Body(...)):
 
 @app.put("/api/acl/{device_id}/{acl_number}/{rule_id}")
 async def update_acl_rule(device_id: int, acl_number: int, rule_id: int, body: dict = Body(...)):
-    """更新 ACL 规则（先删后建）"""
-    devices = database.get_devices()
-    device_info = next((d for d in devices if d["id"] == device_id), None)
-    if not device_info:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    device_config = next(
-        (d for d in config.DEVICE_LIST if d["ip"] == device_info["ip"]), None
-    )
-    if not device_config:
-        raise HTTPException(status_code=404, detail="Device config not found")
-
+    device_config = _get_device_ssh_config(device_id)
     try:
         from driver import get_ssh_driver
         driver = get_ssh_driver(device_config)
@@ -350,18 +337,7 @@ async def update_acl_rule(device_id: int, acl_number: int, rule_id: int, body: d
 
 @app.delete("/api/acl/{device_id}/{acl_number}/{rule_id}")
 async def delete_acl_rule(device_id: int, acl_number: int, rule_id: int):
-    """删除 ACL 规则"""
-    devices = database.get_devices()
-    device_info = next((d for d in devices if d["id"] == device_id), None)
-    if not device_info:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    device_config = next(
-        (d for d in config.DEVICE_LIST if d["ip"] == device_info["ip"]), None
-    )
-    if not device_config:
-        raise HTTPException(status_code=404, detail="Device config not found")
-
+    device_config = _get_device_ssh_config(device_id)
     try:
         from driver import get_ssh_driver
         driver = get_ssh_driver(device_config)
