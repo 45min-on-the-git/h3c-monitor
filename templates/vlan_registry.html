@@ -1,52 +1,76 @@
 {% extends "base.html" %}
-{% block title %}VLAN 台账 — H3C Monitor{% endblock %}
-{% block breadcrumb %}VLAN 台账{% endblock %}
+{% block title %}VLAN 管理 — H3C Monitor{% endblock %}
+{% block breadcrumb %}VLAN 管理{% endblock %}
+
 {% block content %}
+
 <div class="card mb-3">
     <div class="card-body">
         <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
             <div class="form-group mb-0" style="min-width:240px">
                 <label class="form-label">选择设备</label>
-                <select class="form-select" id="deviceSelect" onchange="loadVlans()"><option value="">全部设备</option></select>
+                <select class="form-select" id="deviceSelect" onchange="onDeviceChange()">
+                    <option value="">请选择设备</option>
+                </select>
             </div>
-            <button class="btn btn-outline" id="btnSync" disabled onclick="syncVlans()"><i class="bi bi-arrow-repeat"></i> 同步设备 VLAN</button>
+            <button class="btn btn-primary" id="btnNew" disabled onclick="showVlanForm()">
+                <i class="bi bi-plus-lg"></i> 新建 VLAN
+            </button>
+            <button class="btn btn-outline" id="btnRefresh" disabled onclick="loadVlans()">
+                <i class="bi bi-arrow-clockwise"></i> 刷新
+            </button>
         </div>
     </div>
 </div>
-<div class="card">
+
+<div class="card" id="vlanCard" style="display:none">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-tag"></i> VLAN 列表</span>
+        <span class="text-muted" style="font-size:12px" id="vlanCount"></span>
+    </div>
     <div class="card-body" style="padding:0">
-        <table class="table"><thead><tr><th>VLAN ID</th><th>名称</th><th>设备</th><th>用途</th></tr></thead>
-            <tbody id="vlanTable"><tr class="table-empty"><td colspan="4">加载中...</td></tr></tbody>
+        <table class="table">
+            <thead><tr><th>VLAN ID</th><th>名称</th><th>描述</th><th>操作</th></tr></thead>
+            <tbody id="vlanTable">
+                <tr class="table-empty"><td colspan="4">请选择设备</td></tr>
+            </tbody>
         </table>
     </div>
 </div>
+
+<!-- 新建 VLAN 弹窗 -->
+<div class="modal" id="vlanModal">
+    <div class="card" style="min-width:400px">
+        <div class="card-header flex-between">
+            <span>新建 VLAN</span>
+            <button class="btn btn-sm btn-outline" onclick="closeVlanForm()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <form id="vlanForm">
+                <div class="form-group">
+                    <label class="form-label">VLAN ID</label>
+                    <input type="number" class="form-control" id="vlanId" min="1" max="4094" required placeholder="1-4094">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">名称</label>
+                    <input type="text" class="form-control" id="vlanName" placeholder="如 Management">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">描述</label>
+                    <input type="text" class="form-control" id="vlanDesc" placeholder="可选描述">
+                </div>
+                <div class="flex-between mt-2">
+                    <button type="button" class="btn btn-outline" onclick="closeVlanForm()">取消</button>
+                    <button type="submit" class="btn btn-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+
 {% endblock %}
 {% block scripts %}
-<script>
-let _devices = [];
-document.addEventListener('DOMContentLoaded', async () => {
-    _devices = await API.get('/api/devices') || [];
-    const sel = document.getElementById('deviceSelect');
-    _devices.forEach(d => { const n = d.device_name||d.hostname||d.ip; sel.innerHTML += `<option value="${d.id}">${Util.escapeHtml(n)}</option>`; });
-    loadVlans();
-});
-async function loadVlans() {
-    const did = document.getElementById('deviceSelect').value;
-    document.getElementById('btnSync').disabled = !did;
-    const url = did ? `/api/vlan-registry?device_id=${did}` : '/api/vlan-registry';
-    const vlans = await API.get(url) || [];
-    const tbody = document.getElementById('vlanTable');
-    if (!vlans.length) { tbody.innerHTML = '<tr class="table-empty"><td colspan="4">暂无记录</td></tr>'; return; }
-    tbody.innerHTML = vlans.map(v => {
-        const d = _devices.find(x => x.id === v.device_id);
-        return `<tr><td><span class="badge badge-info">${v.vlan_id}</span></td><td>${Util.escapeHtml(v.name||'-')}</td><td>${(d?.device_name||d?.hostname||d?.ip||'-')}</td><td>${Util.escapeHtml(v.purpose||'-')}</td></tr>`;
-    }).join('');
-}
-async function syncVlans() {
-    const did = document.getElementById('deviceSelect').value;
-    if (!did) return;
-    try { const r = await API.post(`/api/vlan-registry/sync/${did}`); alert(`同步完成: ${r.count} 个 VLAN`); loadVlans(); }
-    catch(e) { alert('同步失败: '+e.message); }
-}
-</script>
+<script src="/static/js/vlan.js"></script>
 {% endblock %}
