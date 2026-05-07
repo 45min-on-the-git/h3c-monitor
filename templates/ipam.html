@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}IP 地址管理 — H3C Monitor{% endblock %}
+{% block breadcrumb %}IP 地址管理{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <!-- 子网列表 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header flex-between">
+                <span><i class="bi bi-diagram-3"></i> 子网</span>
+                <button class="btn btn-sm btn-primary" onclick="showSubnetForm()">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            </div>
+            <div class="card-body" style="padding:0">
+                <div id="subnetList" style="max-height:70vh;overflow-y:auto">
+                    <div class="text-center text-muted" style="padding:20px">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IP 使用详情 -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header flex-between">
+                <span><i class="bi bi-list-ul"></i> IP 地址 <strong id="ipamSubnetName">-</strong></span>
+                <span id="ipamUsage" class="text-muted" style="font-size:12px"></span>
+            </div>
+            <div class="card-body" style="padding:0">
+                <input type="text" class="form-control" id="ipamSearch" placeholder="搜索 IP..." oninput="renderIps()"
+                       style="border:0;border-bottom:1px solid var(--border-color);border-radius:0;padding:8px 12px">
+                <div style="max-height:60vh;overflow-y:auto">
+                    <table class="table" style="margin:0">
+                        <thead><tr>
+                            <th>IP 地址</th><th>设备</th><th>状态</th><th>操作</th>
+                        </tr></thead>
+                        <tbody id="ipamTable">
+                            <tr class="table-empty"><td colspan="4">请选择子网</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 子网表单弹窗 -->
+<div class="modal" id="subnetModal">
+    <div class="card" style="min-width:420px">
+        <div class="card-header flex-between">
+            <span>新建子网</span>
+            <button class="btn btn-sm btn-outline" onclick="closeSubnetForm()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <form id="subnetForm">
+                <div class="form-group">
+                    <label class="form-label">名称</label>
+                    <input type="text" class="form-control" id="subnetName" placeholder="如 核心交换机管理网" required>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">网段</label>
+                        <input type="text" class="form-control" id="subnetNetwork" placeholder="192.168.1.0" required>
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">掩码 (CIDR)</label>
+                        <input type="number" class="form-control" id="subnetCidr" value="24" min="8" max="30" required>
+                    </div></div>
+                </div>
+                <div class="row">
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">网关</label>
+                        <input type="text" class="form-control" id="subnetGateway" placeholder="192.168.1.1">
+                    </div></div>
+                    <div class="col-6"><div class="form-group">
+                        <label class="form-label">VLAN ID</label>
+                        <input type="number" class="form-control" id="subnetVlan" placeholder="可选">
+                    </div></div>
+                </div>
+                <div class="flex-between mt-2">
+                    <button type="button" class="btn btn-outline" onclick="closeSubnetForm()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/ipam.js"></script>
+{% endblock %}

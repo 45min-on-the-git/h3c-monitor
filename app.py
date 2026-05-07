@@ -99,6 +99,14 @@ async def page_alarms(request: Request):
 async def page_acl(request: Request):
     return templates.TemplateResponse(request, "acl.html")
 
+@app.get("/ipam", response_class=HTMLResponse)
+async def page_ipam(request: Request):
+    return templates.TemplateResponse(request, "ipam.html")
+
+@app.get("/config", response_class=HTMLResponse)
+async def page_config(request: Request):
+    return templates.TemplateResponse(request, "config.html")
+
 
 # ══════ 设备 API ══════
 
@@ -353,6 +361,72 @@ async def delete_acl_rule(device_id: int, acl_number: int, rule_id: int):
         driver.delete_acl_rule(acl_number, rule_id)
         driver.disconnect()
         return JSONResponse(content={"success": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════ IPAM API ══════
+
+@app.get("/api/ipam/subnets")
+async def ipam_get_subnets():
+    return JSONResponse(content=database.ipam_get_subnets())
+
+@app.post("/api/ipam/subnets")
+async def ipam_create_subnet(body: dict = Body(...)):
+    sid = database.ipam_create_subnet(
+        name=body["name"], network=body["network"], cidr=body["cidr"],
+        gateway=body.get("gateway", ""), vlan_id=body.get("vlan_id"),
+    )
+    return JSONResponse(content={"success": True, "id": sid})
+
+@app.delete("/api/ipam/subnets/{subnet_id}")
+async def ipam_delete_subnet(subnet_id: int):
+    database.ipam_delete_subnet(subnet_id)
+    return JSONResponse(content={"success": True})
+
+@app.get("/api/ipam/subnets/{subnet_id}/usage")
+async def ipam_subnet_usage(subnet_id: int):
+    return JSONResponse(content=database.ipam_get_subnet_usage(subnet_id))
+
+@app.get("/api/ipam/subnets/{subnet_id}/allocations")
+async def ipam_get_allocations(subnet_id: int):
+    return JSONResponse(content=database.ipam_get_allocations(subnet_id))
+
+@app.post("/api/ipam/subnets/{subnet_id}/allocations")
+async def ipam_set_allocation(subnet_id: int, body: dict = Body(...)):
+    database.ipam_set_allocation(
+        subnet_id, body["ip_address"], body["status"],
+        body.get("device_name", ""), body.get("interface_name", ""),
+        body.get("description", ""),
+    )
+    return JSONResponse(content={"success": True})
+
+
+# ══════ 配置备份 API ══════
+
+@app.get("/api/config-backups/{device_id}")
+async def config_backup_list(device_id: int):
+    return JSONResponse(content=database.config_backup_list(device_id))
+
+@app.get("/api/config-backups/{device_id}/{backup_id}")
+async def config_backup_get(device_id: int, backup_id: int):
+    row = database.config_backup_get(backup_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    return JSONResponse(content=row)
+
+@app.post("/api/config-backups/{device_id}/backup")
+async def config_backup_now(device_id: int):
+    """立即备份设备配置"""
+    device_config = _get_device_ssh_config(device_id)
+    try:
+        from driver import get_ssh_driver
+        driver = get_ssh_driver(device_config)
+        driver.connect()
+        config_text = driver.execute_command("display current-configuration", read_timeout=60)
+        driver.disconnect()
+        bid = database.config_backup_save(device_id, config_text)
+        return JSONResponse(content={"success": True, "id": bid})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

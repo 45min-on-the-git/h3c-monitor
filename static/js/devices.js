@@ -34,38 +34,55 @@ async function loadDeviceList() {
         _allDevices = [];
         showToast('加载设备列表失败: ' + e.message, 'error');
     }
+    _buildLocationFilter();
     renderDeviceList();
+}
+
+function _buildLocationFilter() {
+    const sel = document.getElementById('locationFilter');
+    if (!sel) return;
+    const val = sel.value;
+    const locs = [...new Set(_allDevices.map(d => d.location).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">全部机房</option>' + locs.map(l => `<option value="${Util.escapeHtml(l)}">${Util.escapeHtml(l)}</option>`).join('');
+    sel.value = val;
 }
 
 function renderDeviceList() {
     const search = (document.getElementById('deviceSearch')?.value || '').toLowerCase();
     const category = document.getElementById('categoryFilter')?.value || '';
+    const location = document.getElementById('locationFilter')?.value || '';
 
     let filtered = _allDevices;
     if (search) {
         filtered = filtered.filter(d =>
             (d.device_name || '').toLowerCase().includes(search) ||
             (d.ip || '').toLowerCase().includes(search) ||
-            (d.hostname || '').toLowerCase().includes(search)
+            (d.hostname || '').toLowerCase().includes(search) ||
+            (d.tags || '').toLowerCase().includes(search) ||
+            (d.location || '').toLowerCase().includes(search)
         );
     }
     if (category) filtered = filtered.filter(d => d.device_category === category);
+    if (location) filtered = filtered.filter(d => d.location === location);
 
     const tbody = document.getElementById('devicesTable');
     if (!filtered.length) {
-        tbody.innerHTML = '<tr class="table-empty"><td colspan="8">暂无设备数据</td></tr>';
+        tbody.innerHTML = '<tr class="table-empty"><td colspan="7">暂无设备数据</td></tr>';
         return;
     }
 
-    tbody.innerHTML = filtered.map(d => `
-        <tr>
+    tbody.innerHTML = filtered.map(d => {
+        const tags = (d.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        const tagBadges = tags.length
+            ? tags.map(t => `<span class="badge badge-secondary" style="margin-right:2px">${Util.escapeHtml(t)}</span>`).join('')
+            : '<span class="text-muted">-</span>';
+        return `<tr>
             <td><strong>${Util.escapeHtml(d.device_name || d.hostname || d.ip)}</strong></td>
             <td>${Util.escapeHtml(d.ip)}</td>
             <td><span class="badge ${d.device_category === 'firewall' ? 'badge-danger' : 'badge-info'}">
                 ${d.device_category === 'firewall' ? '防火墙' : '交换机'}</span></td>
-            <td>${Util.escapeHtml(d.model || '-')}</td>
-            <td>${Util.escapeHtml(d.serial_number || '-')}</td>
             <td>${Util.escapeHtml(d.location || '-')}</td>
+            <td>${tagBadges}</td>
             <td>${d.warranty_expiry || '-'}</td>
             <td>
                 <div class="flex gap-2">
@@ -74,8 +91,8 @@ function renderDeviceList() {
                     </button>
                 </div>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 /* === Form === */
@@ -104,6 +121,7 @@ function editDevice(id) {
     document.getElementById('deviceFormWarranty').value = d.warranty_expiry || '';
     document.getElementById('deviceFormSupplier').value = d.supplier || '';
     document.getElementById('deviceFormContract').value = d.contract_no || '';
+    document.getElementById('deviceFormTags').value = d.tags || '';
     document.getElementById('deviceModal').classList.add('open');
 }
 
@@ -127,6 +145,7 @@ document.getElementById('deviceForm').addEventListener('submit', async (e) => {
         warranty_expiry: document.getElementById('deviceFormWarranty').value,
         supplier: document.getElementById('deviceFormSupplier').value,
         contract_no: document.getElementById('deviceFormContract').value,
+        tags: document.getElementById('deviceFormTags').value,
     };
 
     const opLabel = id ? '更新' : '添加';

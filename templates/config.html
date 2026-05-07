@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}配置备份 — H3C Monitor{% endblock %}
+{% block breadcrumb %}配置备份{% endblock %}
+
+{% block content %}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="flex gap-3" style="flex-wrap:wrap;align-items:end">
+            <div class="form-group mb-0" style="min-width:240px">
+                <label class="form-label">选择设备</label>
+                <select class="form-select" id="deviceSelect" onchange="onDeviceChange()">
+                    <option value="">请选择设备</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" id="btnBackup" disabled onclick="doBackup()">
+                <i class="bi bi-cloud-upload"></i> 立即备份
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card" id="backupCard" style="display:none">
+    <div class="card-header flex-between">
+        <span><i class="bi bi-clock-history"></i> 备份历史</span>
+        <span class="text-muted" style="font-size:12px" id="backupCount"></span>
+    </div>
+    <div class="card-body" style="padding:0">
+        <table class="table">
+            <thead><tr><th>时间</th><th>Hash</th><th>操作</th></tr></thead>
+            <tbody id="backupTable">
+                <tr class="table-empty"><td colspan="3">请选择设备</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 查看内容弹窗 -->
+<div class="modal" id="configModal">
+    <div class="card" style="min-width:700px;max-width:90vw;max-height:85vh">
+        <div class="card-header flex-between">
+            <span id="configModalTitle">配置内容</span>
+            <button class="btn btn-sm btn-outline" onclick="document.getElementById('configModal').classList.remove('open')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <pre id="configContent" style="max-height:60vh;overflow:auto;font-size:12px;font-family:var(--font-mono);white-space:pre-wrap"></pre>
+        </div>
+    </div>
+</div>
+
+<style>.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}.modal.open{display:flex}</style>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/config.js"></script>
+{% endblock %}

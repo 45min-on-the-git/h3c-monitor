@@ -95,9 +95,48 @@ def init_db():
     )
     ''')
 
+    # 配置备份表
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS config_backups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id INTEGER NOT NULL,
+        config_text TEXT NOT NULL,
+        config_hash TEXT,
+        backup_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (device_id) REFERENCES devices(id)
+    )
+    ''')
+
+    # IPAM 子网表
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ip_subnets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        network TEXT NOT NULL,
+        cidr INTEGER NOT NULL DEFAULT 24,
+        gateway TEXT,
+        vlan_id INTEGER,
+        description TEXT
+    )
+    ''')
+
+    # IP 分配表
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ip_allocations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subnet_id INTEGER NOT NULL,
+        ip_address TEXT NOT NULL,
+        device_name TEXT,
+        interface_name TEXT,
+        status TEXT DEFAULT 'free' CHECK (status IN ('free','used','reserved')),
+        description TEXT,
+        FOREIGN KEY (subnet_id) REFERENCES ip_subnets(id)
+    )
+    ''')
+
     # 迁移：加 if_speed 列
-    existing = {row[1] for row in cursor.execute("PRAGMA table_info(interface_stats)")}
-    if "if_speed" not in existing:
+    existing_if = {row[1] for row in cursor.execute("PRAGMA table_info(interface_stats)")}
+    if "if_speed" not in existing_if:
         cursor.execute("ALTER TABLE interface_stats ADD COLUMN if_speed INTEGER DEFAULT 0")
 
     # 索引
@@ -464,3 +503,116 @@ def get_interface_traffic(
             "status": row["status"],
         })
     return data
+
+
+# ══════ IPAM ══════
+
+def ipam_get_subnets() -> List[Dict]:
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM ip_subnets ORDER BY id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def ipam_create_subnet(name: str, network: str, cidr: int, gateway: str = "", vlan_id: int = None, description: str = "") -> int:
+    conn = get_db_connection()
+    c = conn.execute(
+        "INSERT INTO ip_subnets (name, network, cidr, gateway, vlan_id, description) VALUES (?,?,?,?,?,?)",
+        (name, network, cidr, gateway, vlan_id, description),
+    )
+    conn.commit()
+    sid = c.lastrowid
+    conn.close()
+    return sid
+
+
+def ipam_delete_subnet(subnet_id: int):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM ip_allocations WHERE subnet_id=?", (subnet_id,))
+    conn.execute("DELETE FROM ip_subnets WHERE id=?", (subnet_id,))
+    conn.commit()
+    conn.close()
+
+
+def ipam_get_allocations(subnet_id: int) -> List[Dict]:
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM ip_allocations WHERE subnet_id=? ORDER BY ip_address", (subnet_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def ipam_set_allocation(subnet_id: int, ip_address: str, status: str, device_name: str = "", interface_name: str = "", description: str = ""):
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT id FROM ip_allocations WHERE subnet_id=? AND ip_address=?", (subnet_id, ip_address)
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE ip_allocations SET status=?, device_name=?, interface_name=?, description=? WHERE id=?",
+            (status, device_name, interface_name, description, row["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO ip_allocations (subnet_id, ip_address, status, device_name, interface_name, description) VALUES (?,?,?,?,?,?)",
+            (subnet_id, ip_address, status, device_name, interface_name, description),
+        )
+    conn.commit()
+    conn.close()
+
+
+def ipam_get_subnet_usage(subnet_id: int) -> Dict:
+    """返回子网利用率"""
+    conn = get_db_connection()
+    subnet = conn.execute("SELECT * FROM ip_subnets WHERE id=?", (subnet_id,)).fetchone()
+    if not subnet:
+        conn.close()
+        return {}
+    total_ips = max(2 ** (32 - subnet["cidr"]) - 2, 1)  # 去掉网络地址和广播地址
+    used = conn.execute(
+        "SELECT COUNT(*) as n FROM ip_allocations WHERE subnet_id=? AND status IN ('used','reserved')",
+        (subnet_id,),
+    ).fetchone()["n"]
+    conn.close()
+    return {
+        "subnet": dict(subnet),
+        "total": total_ips,
+        "used": used,
+        "free": total_ips - used,
+        "utilization": round(used / total_ips * 100, 1) if total_ips > 0 else 0,
+    }
+
+
+# ══════ 配置备份 ══════
+
+import hashlib
+
+def config_backup_save(device_id: int, config_text: str) -> int:
+    conn = get_db_connection()
+    h = hashlib.sha256(config_text.encode()).hexdigest()[:16]
+    c = conn.execute(
+        "INSERT INTO config_backups (device_id, config_text, config_hash) VALUES (?,?,?)",
+        (device_id, config_text, h),
+    )
+    conn.commit()
+    bid = c.lastrowid
+    conn.close()
+    return bid
+
+
+def config_backup_list(device_id: int, limit: int = 20) -> List[Dict]:
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT id, device_id, config_hash, backup_time FROM config_backups WHERE device_id=? ORDER BY backup_time DESC LIMIT ?",
+        (device_id, limit),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def config_backup_get(backup_id: int) -> Optional[Dict]:
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM config_backups WHERE id=?", (backup_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None

@@ -11,13 +11,16 @@
             <div class="flex gap-2" style="flex-wrap:wrap">
                 <div class="search-box">
                     <i class="bi bi-search"></i>
-                    <input type="text" class="form-control" id="deviceSearch" placeholder="搜索设备名称/IP..."
+                    <input type="text" class="form-control" id="deviceSearch" placeholder="搜索名称/IP/标签..."
                            oninput="renderDeviceList()" style="padding-left:32px">
                 </div>
                 <select class="form-select" id="categoryFilter" onchange="renderDeviceList()" style="width:auto">
                     <option value="">全部类型</option>
                     <option value="firewall">防火墙</option>
                     <option value="switch">交换机</option>
+                </select>
+                <select class="form-select" id="locationFilter" onchange="renderDeviceList()" style="width:auto">
+                    <option value="">全部机房</option>
                 </select>
             </div>
             <button class="btn btn-primary" onclick="showDeviceForm()">
@@ -37,15 +40,14 @@
                         <th>设备名称</th>
                         <th>IP 地址</th>
                         <th>类型</th>
-                        <th>型号</th>
-                        <th>序列号</th>
                         <th>所属机房</th>
+                        <th>标签</th>
                         <th>维保到期</th>
                         <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="devicesTable">
-                    <tr class="table-empty"><td colspan="8">加载中...</td></tr>
+                    <tr class="table-empty"><td colspan="7">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -126,6 +128,12 @@
                         <label class="form-label">合同编号</label>
                         <input type="text" class="form-control" id="deviceFormContract">
                     </div></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">标签</label>
+                    <div class="flex gap-2">
+                        <input type="text" class="form-control" id="deviceFormTags" placeholder="逗号分隔，如 核心,生产,A区">
+                    </div>
                 </div>
                 <div class="flex-between mt-2">
                     <div></div>
